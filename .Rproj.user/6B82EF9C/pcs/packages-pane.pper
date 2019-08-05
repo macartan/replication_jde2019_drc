@@ -1,7 +1,0 @@
-{
-    "installOptions" : {
-        "installDependencies" : true,
-        "installFromRepository" : true,
-        "libraryPath" : "C:/Users/macar/Documents/R/win-library/3.5"
-    }
-}

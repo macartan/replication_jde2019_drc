@@ -1,1 +1,0 @@
-"0","kable(cbind(varnames_, robust_main_results, robust_alt_treatment, robust_village_level, robust_lott_bins, robust_prop_weight), col.names = c("""", ""Base"", ""Alt. Treat"", ""Village (weighted)"", ""No block FE"", ""Village (unweighted)""))"

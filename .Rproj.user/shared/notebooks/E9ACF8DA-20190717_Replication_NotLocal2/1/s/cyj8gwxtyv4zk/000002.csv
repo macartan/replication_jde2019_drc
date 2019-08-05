@@ -1,3 +1,0 @@
-"0","varnames_ <- c(varnames, varnames)"
-"0","varnames_[ 1:length(varnames_) %% 2 != 0] <- varnames"
-"0","varnames_[ 1:length(varnames_) %% 2 == 0] <- """""

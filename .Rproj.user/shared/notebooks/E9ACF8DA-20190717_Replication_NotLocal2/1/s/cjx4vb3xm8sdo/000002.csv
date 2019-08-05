@@ -1,8 +1,0 @@
-"0","source(""Code/3.4 Output_SumStats.R"")"
-"0",""
-"0","if(saving){"
-"0","  sink(paste0(output_folder,""/Table5_SumStats.tex""))"
-"0","  tablr(T_SS)"
-"0","  sink()"
-"0","}"
-"0",""

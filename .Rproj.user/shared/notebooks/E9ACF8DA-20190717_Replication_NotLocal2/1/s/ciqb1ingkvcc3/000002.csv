@@ -1,6 +1,0 @@
-"0","tab <- as.data.frame(balance.table)"
-"0","row.names(tab) <- c(""Distance from major urban center"", ""Distance to village mine"","
-"0","                    ""Mineral composition"", ""Presence infrastructure in 2006"","
-"0","                    ""Former chief popular choice"", ""In-migration in 2006"", ""Age"")"
-"0",""
-"0","kable(tab, col.names = c(""Control"", ""Tuungane"", ""d-stat"", ""N""))     "

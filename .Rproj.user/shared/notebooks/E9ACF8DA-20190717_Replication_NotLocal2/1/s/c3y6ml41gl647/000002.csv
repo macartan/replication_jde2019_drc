@@ -1,3 +1,0 @@
-"0","saveRDS(vill, ""Data/vill.RDS"")"
-"0","set.seed(1)"
-"0","vill <- readRDS(file = ""Data/vill.RDS"")"

@@ -1,2 +1,0 @@
-"0","#Average share of women in committee in control and treatment"
-"0","vill %>% group_by(TUUNGANE) %>% summarize(share = mean(SHARE, na.rm = TRUE))"
