@@ -1,0 +1,117 @@
+
+********************************************************
+
+VERSION 2: May 3 2017
+
+********************************************************
+
+An update on the first version:
+
+Updates made:
+- improvements to some variables: da000_name_chefferie, qr001, b_23
+- treatment identifiers (Tuungane, Rapid, and those related to the survey experiments) made available
+
+FYI:
+- updated datasets end with "_v2"
+- "DRC2012_Instruments.pdf", "DRC2012_Overview_Label.xlsx", "DRC2012_Overview_Weights.xlsx" were not updated
+
+- Version 2 includes 3 additional datasets:
+
+"IRC_tracking_v2.dta"
+- Information about all 1,250 Tuungane treatment villages (so-called VDCs)
+- Obtained from the IRC in 2010
+
+"Lottery_v2.dta"
+- 2006/2007 data on CDC level lottery: into Tuungane treatment, and into gender parity treatment
+- for 630 CDCs, grouped into 83 lottery bins
+
+"TUUNGANE_v2.dta"
+- The Tuungane treatment status for all 1,120 targeted villages 
+- Tuungane treatment status is also already incorporated in the datasets itself
+
+
+********************************************************
+
+VERSION: 24 June 2015
+
+********************************************************
+
+This is data used for a set of research projects.
+It is in a raw state, corrected versions may be posted at a later date.
+The PIs can only provide limited support to users.
+
+Information related to 2012 data collected in Eastern Congo
+Collected in 2012 in the provinces: South Kivu, Haut Katanga, Tanganyika, Maniema	
+Project website: http://cu-csds.org/projects/postconflict-development-in-congo/
+
+********************************************************
+
+"DRC2012_Instruments.pdf"
+- Document contains all instruments
+- All variables in the datasets have informative labels that relate to this document
+
+********************************************************
+
+DATASETS:
+
+All variables are labeled, where the first word indicates the survey model from where the data originated. 
+See "DRC2012_Overview_Label.xls" for more info
+
+"DRC2012_Overview_Weights.xls" gives an overview of the different sampling weights used for this study
+
+Variables that are the same across the datasets:
+- IDV: is the village ID
+- IDS: is the survey ID
+- IDO: is the ID for next lower level unit (e.g. unique code for different fields)
+
+Generic codes across the datasets:
+- "-9" is don't know
+- "-8" is not applicable
+- "-7" is refused to respond
+		
+Related to the datasets, the letters after "DRC2012" indicate during what step(s) the data was collected
+Data was collected in two different types of villages: RAPID villages and survey-only villages
+RAPID villages received a $1,000 unconditional cash transfer. These villages were visited 4 times: A-D
+Survey-only villages were visited only once. During Step D.
+
+"A_DISC.dta" 
+- All discussion interventions during the village assembly during Step A
+- for the 560 RAPID villages only
+- 7,761 observations. Level is intervention
+- IDO indicates intervention
+- All unique interventions, but note that (IDV IDO) is not unique
+
+"D_AUDIT.dta" 
+- Information from the audit that was conducted
+- for 560 RAPID villages
+- level at the village
+
+"D_ROSTER.dta"
+- Information about all individuals in the household
+- for 1,120 villages and 10,640 households
+- 47,369 observations
+
+"ABD_VILL.dta"
+- for 1,120 villages
+- Has the village level data
+
+"ABD_INDIV.dta"
+- Has lots of different types of respondents: 5 HHs, 3 most influential during step A, 1 chef, etc.
+- for 1,120 villages and 10,640 households
+- 10,640 observations
+
+Note that due to security reasons, etc. not all 1,120 villages were visited and not all 10,640 individuals were interviewed.
+
+********************************************************
+
+We left out some data purposefully: 
+- Anything that can identify the household or the individual (names, phonenumbers, households' GPS location, etc.)
+- Variables that are treatment variations for which we hope to write future academic papers.
+
+********************************************************
+	
+Any comments or errors, please send an email: csds@columbia.edu
+
+
+								** END **
+	

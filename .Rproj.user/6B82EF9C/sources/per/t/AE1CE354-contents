@@ -1,0 +1,1606 @@
+---
+title: 'Exporting Democratic Practices:  Evidence from a Village Governance Intervention in East Congo'
+author: "Macartan Humphreys, Raul Sanchez de la Sierra, Peter van der Windt"
+date: "February 28, 2019"
+output:
+  html_document:
+    number_sections: yes
+    theme: united
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+rm(list=ls(all=TRUE)) 
+gc()
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+This file replicates the core analysis as well as additional results of [Humphreys, M., de la Sierra, R. S., & Van der Windt, P. (2019). Exporting democratic practices: Evidence from a village governance intervention in Eastern Congo. _Journal of Development Economics_](https://www.sciencedirect.com/science/article/pii/S0304387818305078). 
+
+Data for this analysis is [available on Dataverse](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BSASJR) and can be sourced directly from the Dataverse server with the option below (`local_data <- FALSE`) or locally from folder "Data". 
+
+Supporting code can be found in folder "Code". The code outputs tables and figures into the folder "Output", which are then sourced in from the LaTeX file of the manuscript.
+
+```{r, include = FALSE}
+set.seed(1)
+# Install packages
+
+# Possibly necessary installations (if sourcing data from Dataverse):
+# devtools::install_github("iqss/dataverse-client-r")
+# install.packages("DeclareDesign", dependencies = TRUE,
+# repos = c("http://R.declaredesign.org", "https://cloud.r-project.org"))
+
+# Load (and install when necessary) packages
+
+library("pacman")
+pacman::p_load(rgdal,raster,plyr,AER,devtools,doBy,dplyr,energy,entropy,foreign,gdata,ggplot2,ggthemes,grid,gridExtra,haven,ivpack,lmtest,magrittr,maps,maptools,mosaic,multiwayvcov,pander,parallel,plm,R.matlab,reshape2,sandwich,SDMTools,spdep,stargazer,tidyr,xtable,SDMTools, estimatr, knitr,readstata13, rio, DeclareDesign, rmarkdown)
+
+# Options
+options(xtable.comment = FALSE)
+panderOptions("table.style", "rmarkdown")
+panderOptions("digits",  4)
+panderOptions("table.split.table", 140)
+panderOptions("table.caption.prefix","")
+
+```
+
+#### Options
+
+```{r}
+
+# load data locally (TRUE) or from dataverse (FALSE)
+local_data <- FALSE
+local_datapath = "Data"
+
+# save figure and tables to output folder
+saving <- FALSE
+output_folder <- "Output"
+
+# Set number simulatons used for calculating propensities and for the randomization inference p-values
+spilloversims <- 50 #5000 takes a long time, consider lowering for speediness
+
+# Reproduce outputs requiring GPS data (`FALSE` since not publicly available)
+with_GPS <- TRUE
+```
+
+#### Definitions
+
+```{r}
+# List indicators of main outcome (capture)
+
+capture_var_names <- c(
+  "Financial Irregularities",
+  "Embezzlement (direct)",
+  "Embezzlement (list experiment)",
+  "Inequality of (Private) Benefits",
+  "Dominance of Chief's Preferences")
+
+# List indicators of mechanisms (participation, accountability, transparency)
+
+mech_var_names = c(
+  "Meeting Attendance",
+  "Interventions in Meeting",
+  "Dominance of Men in Discussion",
+  "Participatory Selection Methods",
+  "Committee Composition",
+  "Accountability Mechanisms", 
+  "Private Complaints", 
+  "Knowledge of Project Amount",
+  "Willingness to Seek Information",
+  "Quality of Accounting"
+)
+
+varnames <- c(capture_var_names, mech_var_names)
+varnames2 <- paste(rbind(varnames, rep("",length(varnames))))
+
+```
+
+#### Run Helper Code
+
+Script to create helper functions that will be used in the remainder of the replication.
+```{r}
+source("Code/0 HelperFunctions.R")
+```
+
+
+#### Get Data
+
+Script to load data; either from local folder, or partially online and partially from local folder.
+
+```{r}
+if(local_data){
+  abd_vill     <- load_file("DRC2012_ABD_VILL_v2.dta") 
+  abd_ind      <- load_file("DRC2012_ABD_INDIV_v2.dta")
+  tuungane     <- load_file("TUUNGANE_v2.dta")
+  irc_tuungane <- load_file("irc_tuungane.dta")
+  audit        <- load_file("DRC2012_D_AUDIT_v2.dta") 
+  abd_disc     <- load_file("DRC2012_A_DISC_v2.dta")   
+  roster       <- load_file("DRC2012_D_ROSTER_v2.dta")
+  cdcdata      <- load_file("gps/IDV_WEIGHTS_201203.dta")
+  D            <- load_file("Dates_medians.dta")
+  idv_dists    <- load_file("idv_distances.dta")
+ 
+  if(with_GPS){
+    # Raw GPS data not available for replication
+    X            <- load_file("20140211indirect_5000sims_5km.dta")
+    X20          <- load_file("20140211indirect_5000sims_20km.dta")
+    GPS          <- load_file("gps/gps_tuungane.dta")
+    drc.map.test <- readShapePoly(paste0(local_datapath, "/shapefiles/COD_adm2"))
+    col          <- readOGR(dsn = paste0(local_datapath, "/shapefiles"), "collectivite")
+  }
+  
+}else{
+  # Import data from Dataverse
+  library(dataverse)
+  source("Code/1 GetData.R")
+}
+
+```
+
+
+#### Prepare Dataset and Variables
+
+Script prepares data and variables for analysis.
+
+```{r}
+# Prepare the datasets and variables for analyses
+# Merge subgroup data, treatment info, lottery info, etc. to the datasets
+source("Code/2.1 PrepDatasets_Clean.R")
+
+# Prepare data for spillovers analysis
+source("Code/2.2 PrepSpillovers.R")
+```
+
+# Table 2: Results on Public Fund Allocation
+
+Script presents the result on public funds allocation. 
+
+```{r, warning=FALSE}
+dvs <- c("da109_not_verifiable", 
+         "qr026i_fund_misuse",
+         #"qr2729_list_experiment", 
+         "qr2830_list_experiment",
+         "stdev_benefits",
+         #"Correct_D_projet"
+         "Correct_B_projet")
+
+main_results <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE ,
+                            data     = vill, 
+                            fixed_effects = LOTT_BIN,
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(qr026i_fund_misuse ~ TUUNGANE  + as.factor(LOTT_BIN) ,
+                           data     = ind, 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE),
+  
+#  embezzl_list = lm_robust(as.formula("qr2729_list_experiment  ~ TUUNGANE + RA + RA*TUUNGANE + as.factor(LOTT_BIN)"), 
+
+  embezzl_list = lm_robust(
+    qr2830_list_experiment ~ TUUNGANE + RB + RB*TUUNGANE + as.factor(LOTT_BIN),                 
+                           data     = ind,
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE , 
+                           fixed_effects = LOTT_BIN,
+                           data     = vill,
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(
+    Correct_B_projet ~ TUUNGANE + CHIEF + CHIEF*TUUNGANE +  as.factor(LOTT_BIN) , 
+                           data     = ind,
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT))
+
+main_table_pre <- mapply(function(x, name)  { 
+  tidy = tidy(x); rownames(tidy) = tidy$term;
+  if( name ==  "embezzl_list"   ) 
+    round(c(Control   = tidy["RB", "estimate"],
+            Control_se   = tidy["RB", "std.error"],
+            Effect    = tidy["TUUNGANE:RB", "estimate"],  
+            std_error = tidy["TUUNGANE:RB", "std.error"],
+            N         = x$N), 3)
+  else if(name == "chief_domin")
+    round(c(Control   = tidy["CHIEFTRUE", "estimate"],
+            Control_se   = tidy["CHIEFTRUE", "std.error"],
+            Effect    = tidy["TUUNGANE:CHIEFTRUE", "estimate"],  
+            std_error = tidy["TUUNGANE:CHIEFTRUE", "std.error"],
+            N         = x$N), 3)
+  else
+    round(c(Control  = tidy["(Intercept)", "estimate"],
+            Control_se  = tidy["(Intercept)", "std.error"],
+            Effect    = tidy["TUUNGANE", "estimate"], 
+            std_error = tidy["TUUNGANE", "std.error"], 
+            N         = x$N ),3)
+  
+}, main_results, names(main_results))
+
+add_cols <- mapply(function(d, dv){
+  d <- d %>% arrange(LOTT_BIN)
+  N_cluster <- ifelse(length(unique(d$IDV_CDCCODE[!is.na(d[[dv]])])) > 0,
+                      length(unique(d$IDV_CDCCODE[!is.na(d[[dv]])])),
+                      length(unique(d$IDS_CDCCODE[!is.na(d[[dv]])])))
+  
+  #block weights in the data
+  d$dv <- d[[dv]][]
+  #block average for control
+  ave_ctrl_blocks <- d %>% 
+    subset(TUUNGANE == 0) %>%
+    group_by(LOTT_BIN) %>%
+    summarize(block_n = sum(!is.na(dv)),
+              ave = mean(dv, na.rm = TRUE)) %>% ungroup() %>%
+    mutate(block_w = block_n/nrow(.))
+  #weighted average of block averages
+  w_ave_ctrl_blocks <- weighted.mean(ave_ctrl_blocks$ave, ave_ctrl_blocks$block_w, na.rm = TRUE)
+  #weighted sd of block averages
+  #w_sd_ctrl_blocks <- sqrt(sum(block_w * (ave_ctrl_blocks$ave - w_ave_ctrl_blocks)^2, na.rm = TRUE))
+  w_sd_ctrl_blocks <- sd(d$dv, na.rm = TRUE)
+  
+  return(round(rbind(w_ave_ctrl_blocks, w_sd_ctrl_blocks, N_cluster), 3))
+}, d = list(vill, ind, ind, vill, ind), dv = dvs) %>% t()
+
+main_table <- cbind(control.mean = add_cols[,1], control.sd = add_cols[,2], t(main_table_pre)[,-c(1:2)], N_cluster = add_cols[,3])
+
+#maintain beta1 coefficient and standard error instead of control mean for "embezzl_dir", "chief_domin"
+keep_beta1 <- rownames(main_table) %in% c("embezzl_list", "chief_domin")
+main_table[keep_beta1, "control.mean"] <- t(main_table_pre)[keep_beta1, "Control"]
+main_table[keep_beta1, "control.sd"] <- t(main_table_pre)[keep_beta1, "Control_se"]
+
+kable(main_table)
+```
+
+# Table 3: Results on Democratic Practices
+
+Script presents the result on democratic practices. 
+
+```{r}
+
+dvs_mech <- c("PART_A1", "N_INTERV", "MALE_DOM", "MFI_SELECTION", "MFI_COMPOSITION", "MFI_MECHANISMS", "MFI_COMPLAINTS", "qr002CORRECT", "qi003_accept", "MFI_ACCOUNTING")
+
+mechanisms <- list(
+  part  =  lm_robust(PART_A1   ~ TUUNGANE ,
+                     data = vill, 
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE ,
+                     data = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE ,
+                     data = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     fixed_effects = LOTT_BIN,
+                     data = vill, 
+                     weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  compl = lm_robust(MFI_COMPLAINTS ~ TUUNGANE + as.factor(LOTT_BIN),
+                    data =  ind,
+                    weights = VILL_WEIGHT,
+                    clusters = IDS_CDCCODE),
+  corr  = lm_robust(qr002CORRECT   ~ TUUNGANE + as.factor(LOTT_BIN),
+                    data =  ind,
+                    weights = VILL_WEIGHT,
+                    clusters = IDS_CDCCODE),
+  accep = lm_robust(qi003_accept  ~ TUUNGANE + as.factor(LOTT_BIN),
+                    data =  ind, 
+                    weights = VILL_WEIGHT,
+                    clusters = IDS_CDCCODE ),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT)
+)
+
+mechanisms_table <- mapply(function(x, name){ 
+  tidy = tidy(x); rownames(tidy) = tidy$term;
+  round(c(Control  = tidy["(Intercept)", "estimate"],
+          Effect    = tidy["TUUNGANE", "estimate"], 
+          std_error = tidy["TUUNGANE", "std.error"], 
+          N         = x$N ),3)
+  
+}, mechanisms, names(mechanisms))
+
+add_cols <- mapply(function(d, dv){
+  d <- d %>% arrange(LOTT_BIN)
+  N_cluster <- ifelse(length(unique(d$IDV_CDCCODE[!is.na(d[[dv]])])) > 0,
+                      length(unique(d$IDV_CDCCODE[!is.na(d[[dv]])])),
+                      length(unique(d$IDS_CDCCODE[!is.na(d[[dv]])])))
+  
+  #block weights in the data
+  d$dv <- d[[dv]][]
+  #block average for control
+  ave_ctrl_blocks <- d %>% 
+    subset(TUUNGANE == 0) %>%
+    group_by(LOTT_BIN) %>%
+    summarize(block_n = sum(!is.na(dv)),
+              ave = mean(dv, na.rm = TRUE)) %>% ungroup() %>%
+    mutate(block_w = block_n/nrow(.))
+  #weighted average of block averages
+  w_ave_ctrl_blocks <- weighted.mean(ave_ctrl_blocks$ave, ave_ctrl_blocks$block_w, na.rm = TRUE)
+  #weighted sd of block averages
+  w_sd_ctrl_blocks <- sd(d$dv, na.rm = TRUE)
+  
+  return(round(rbind(w_ave_ctrl_blocks, w_sd_ctrl_blocks, N_cluster), 3))
+}, d = list(vill, vill, vill, vill, vill, vill, ind, ind, ind, vill), dv = dvs_mech) %>% t()
+
+mechanisms_table <- cbind(control.mean = add_cols[,1], control.sd = add_cols[,2], t(mechanisms_table)[,-1], N_cluster = add_cols[,3])
+
+kable(mechanisms_table)
+```
+
+Script to output result tables to .tex files.
+```{r}
+source("Code/3.2 Output_MainResults.R")
+
+if(saving){
+  sink(paste0(output_folder, "/Table2_Capture.tex"))
+  tablr(T2)
+  sink()
+  
+  sink(paste0(output_folder, "/Table3_Practice.tex"))
+  tablr(T3)
+  sink()
+}
+```
+
+# Table 4: Tuungane Balance Table
+
+Create Tuungane balance table.  
+```{r}
+# Balance variables
+BALANCE_VARS <- c(DIST   = "distance",
+                  VILL   = "dist_mine",
+                  VILL   = "mineral_index",
+                  PUBLIC = "public2006",
+                  VILL   = "former_chief_elec",
+                  MIG    = "mig2006",  
+                  STATS  = "age"
+)
+
+# Balance datasets
+BALANCE <- list(vill, vill, vill, vill, vill, vill,  as.data.frame(STATS))
+
+# Balance table
+balance.table <- sapply(1:length(BALANCE), function(i){
+  data <- BALANCE[[i]]
+  Y    <- BALANCE_VARS[i]
+  balance_function(data[,Y, drop = TRUE],
+                   data[,"TUUNGANE", drop = TRUE], 
+                   data[,"VILL_WEIGHT", drop = TRUE])}) %>% 
+  round(., 2) %>% 
+  t()
+```
+
+```{r, echo=FALSE}
+tab <- as.data.frame(balance.table)
+row.names(tab) <- c("Distance from major urban center", "Distance to village mine",
+                    "Mineral composition", "Presence infrastructure in 2006",
+                    "Former chief popular choice", "In-migration in 2006", "Age")
+
+kable(tab, col.names = c("Control", "Tuungane", "d-stat", "N"))     
+```
+
+# Table 4b: RAPID Balance Table (Supplementary)
+
+Create RAPID balance table. 
+```{r}
+# Balance table
+balance.table.RAPID <- sapply(1:length(BALANCE), function(i){
+  data <- BALANCE[[i]]
+  Y    <- BALANCE_VARS[i]
+  balance_function(data[,Y][],
+                   data[,"IDV_RAPID"][], 
+                   data[,"IPW_RAPID"][])}) %>% 
+  round(., 2) %>% 
+  t()
+```
+
+```{r, echo=FALSE}
+tab <- as.data.frame(balance.table.RAPID)
+row.names(tab) <- c("Distance from major urban center", "Distance to village mine",
+                    "Mineral composition", "Presence infrastructure in 2006",
+                    "Former chief popular choice", "In-migration in 2006", "Age")
+
+kable(tab, col.names = c("Control", "RAPID", "d-stat", "N"))     
+```
+
+Script to output tables to .tex files.
+```{r}
+
+source("Code/3.1 Output_BalanceTables.R")
+
+if(saving){
+  sink(paste0(output_folder, "/Table4_Balance_TUUNGANE.tex"))
+  tablr(T_Balance)
+  sink()
+}
+
+if(saving){
+  sink(paste0(output_folder, "/Table4_Balance_RAPID.tex"))
+  tablr(T_Balance_RAPID)
+  sink()
+}
+
+```
+# Table 5: Summary Statistics
+
+```{r}
+
+outcomes <- c("RAPID", "TUUNGANE", "da109_not_verifiable", "qr026i_fund_misuse",
+              "qr2830_list_experiment","stdev_benefits", "Correct_B_projet",
+              "PART_A1", "N_INTERV", "MALE_DOM", "MFI_SELECTION", "MFI_COMPOSITION", 
+              "MFI_MECHANISMS","MFI_COMPLAINTS", "qr002CORRECT", "qi003_accept", 
+              "MFI_ACCOUNTING")
+
+datasets <- list(cdcdata, cdcdata, vill, 
+                 ind,ind,vill,
+                 ind, vill, vill,  vill,
+                 vill, vill,  vill,ind,                         
+                 ind, ind, vill)
+
+
+sumStats <- mapply(function(y, d){
+  
+  IDVs <- cdcdata[,"IDV"]
+  
+  if(y == "qr2830_list_experiment" | y == "Correct_B_projet"){
+    
+    # subset interactions
+    if(y == "qr2830_list_experiment")   {i0 <- d$RB    == 0;i1 <- d$RB    == 1}
+    if(y == "Correct_B_projet") {i0 <- d$CHIEF == 0; i1 <- d$CHIEF == 1}
+    
+    # compute subsetted villmeans 
+    villmean_0 <- aggregate(d[i0,c("IDV",y)], by= list(d$IDV[i0]), FUN="mean", na.rm=TRUE) %>%
+      select(IDV, X_0 = y)
+    villmean_1 <- aggregate(d[i1,c("IDV",y)], by= list(d$IDV[i1]), FUN="mean", na.rm=TRUE)%>%
+      select(IDV, X_1 = y)
+    
+    # Clean up interactions -- Impute means where one side has data present
+    villmean    <- merge(IDVs, villmean_0, by = "IDV", all.x = TRUE) %>%
+      merge(villmean_1 ,by = "IDV", all.x = TRUE) %>%
+      mutate(X_1 = ifelse(is.na(X_1)& !is.na(X_0), mean(X_1, na.rm = TRUE), X_1),
+             X_0 = ifelse(!is.na(X_1)&!is.na(X_0), mean(X_0, na.rm = TRUE), X_0),
+             X  = X_1 - X_0)
+    
+  } else {
+    
+    villmean <-  aggregate(d[,c("IDV",y)], by= list(d$IDV), FUN="mean", na.rm=TRUE) %>%
+      select(IDV, X = y)
+    
+  }
+  with(villmean,
+       c( N = sum(!is.na(X)), mean = mean(X, na.rm = T), sd = sd(X, na.rm = T) , min = min(X, na.rm = T), max =max(X, na.rm = T)))
+},y = outcomes, datasets)
+
+kable(t(sumStats ), digits = 2 )
+
+```
+
+Script to output table to .tex files.
+
+```{r}
+source("Code/3.4 Output_SumStats.R")
+
+if(saving){
+  sink(paste0(output_folder,"/Table5_SumStats.tex"))
+  tablr(T_SS)
+  sink()
+}
+
+```
+
+# Tables 6 and 7: Spillovers
+
+```{r, include = TRUE}
+# Generate village level data
+villmeans2 <- villmeans[,c(1, 8:22)]
+gpsvars    <- names(villmeans2)[-1]
+gps <- merge(gps, villmeans2, by = "IDV", all.x = TRUE)
+
+# spillover at 5km threshold
+analysis05 <- sapply(gpsvars, function(j) ri.analysis(gps[j][[1]], IND = gps$indirect05, indirects=ind05, weight = gps$gps_weight05, f_w = gen_weight05, spilloversims = spilloversims))
+CONTENT05 <- round(t(analysis05),2)
+
+# spillover at 20km threshold
+analysis20 <- sapply(gpsvars, function(j) ri.analysis(gps[j][[1]], IND = gps$indirect20, indirects=ind20, weight = gps$gps_weight20, f_w = gen_weight20, spilloversims = spilloversims))
+CONTENT20 <- round(t(analysis20),2)
+
+kable(CONTENT05, title = "Spillovers at 5km")
+kable(CONTENT20, title = "Spillovers at 20km")
+```
+
+Script to output tables to .tex files.
+
+```{r}
+source("Code/3.5 Output_Spillovers.R")
+
+if(saving){
+  sink(paste0(output_folder, "/Table6_spill05.tex"))
+  tablr(T_spill05)
+  sink()
+  
+  sink(paste0(output_folder,"/Table7_spill20.tex"))
+  tablr(T_spill20)
+  sink()
+}
+```
+
+# Table 8: Social Desirability
+
+```{r}
+
+pos <- lm_robust(FIRST_ANSWER ~  TUUNGANE + IDS_TUUNGANE_POS + POS_PROMPT,
+                 weights = VILL_WEIGHT, data = ind, clusters = IDS_CDCCODE)
+
+neg <- lm_robust(FIRST_ANSWER ~  TUUNGANE + IDS_TUUNGANE_NEG + NEG_PROMPT,
+                 weights = VILL_WEIGHT, data = ind,
+                 clusters = IDS_CDCCODE)
+
+summary(pos)
+summary(neg)
+```
+
+
+```{r, echo=FALSE}
+source("Code/3.6 Output_SocDesirability.R")
+
+if(saving){
+  sink(paste0(output_folder, "/Table8_SocDes.tex"))
+  tablr(sd.Table)
+  sink()
+}
+rownames(OUTPUT) <-  c("Control", "Tuungane", "Difference", "(se)")
+kable(OUTPUT, col.names = c("Positive prompt" , "Negative prompt"	,	"Difference" , "(se)") )
+
+```
+
+# Table 9: Robustness
+
+```{r, include = TRUE}
+## 1: Alternative treatment
+
+robust_alt_treatment <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ IRC_TUUNGANE,
+                            data     = vill, 
+                            fixed_effects = LOTT_BIN,
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(qr026i_fund_misuse ~ IRC_TUUNGANE + as.factor(LOTT_BIN),
+                           data     = ind, 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(
+    qr2830_list_experiment  ~ IRC_TUUNGANE + RB + RB*IRC_TUUNGANE + as.factor(LOTT_BIN), 
+                           data     = ind,
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ IRC_TUUNGANE, 
+                           fixed_effects = LOTT_BIN,
+                           data     = vill,
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(
+    Correct_B_projet ~ IRC_TUUNGANE + CHIEF + CHIEF*IRC_TUUNGANE + as.factor(LOTT_BIN), 
+                           data     = ind,
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT),
+  
+  part  =  lm_robust(PART_A1   ~ IRC_TUUNGANE ,
+                     data = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  
+  inter =  lm_robust(N_INTERV  ~ IRC_TUUNGANE,
+                     data = vill, 
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  
+  male_d = lm_robust(MALE_DOM  ~ IRC_TUUNGANE,
+                     data = vill,
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT),
+  
+  sel    = lm_robust(MFI_SELECTION ~ IRC_TUUNGANE,
+                     fixed_effects = LOTT_BIN,
+                     data = vill, weights = VILL_WEIGHT),
+  
+  compos = lm_robust(MFI_COMPOSITION ~ IRC_TUUNGANE,
+                     fixed_effects = LOTT_BIN,
+                     data = vill, 
+                     weights = VILL_WEIGHT),
+  
+  mech   = lm_robust(MFI_MECHANISMS  ~ IRC_TUUNGANE,
+                     fixed_effects = LOTT_BIN,
+                     data  = vill, 
+                     weights = VILL_WEIGHT),
+  
+  compl = lm_robust(MFI_COMPLAINTS ~ IRC_TUUNGANE + as.factor(LOTT_BIN),
+                    data =  ind,
+                    weights = VILL_WEIGHT,
+                    clusters = IDS_CDCCODE ),
+  
+  corr  = lm_robust(qr002CORRECT   ~ IRC_TUUNGANE + as.factor(LOTT_BIN),
+                    data =  ind, 
+                    weights = VILL_WEIGHT, 
+                    clusters = IDS_CDCCODE ),
+  
+  accep = lm_robust(qi003_accept  ~ IRC_TUUNGANE + as.factor(LOTT_BIN),
+                    data =  ind,
+                    weights = VILL_WEIGHT, 
+                    clusters = IDS_CDCCODE),
+  
+  accoun = lm_robust(MFI_ACCOUNTING ~ IRC_TUUNGANE,
+                     data  = vill, 
+                     fixed_effects = LOTT_BIN,
+                     weights = VILL_WEIGHT)
+)
+
+robust_alt_treatment <- mapply(tidy_results, robust_alt_treatment, names(robust_alt_treatment), alt_treat = TRUE) %>% t()
+robust_alt_treatment[,3] <- paste0("(", robust_alt_treatment[,3], ")")
+robust_alt_treatment <- splice_sds(robust_alt_treatment[,2:3])
+
+# 2: Village level
+robust_village_level <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE,
+                            data     = vill,  # sampling weights don't apply
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(Y_weighted ~ TUUNGANE,
+                           data     = genVillmeans("qr026i_fund_misuse", ind), 
+                           weights  = VILL_WEIGHT),
+  
+  embezzl_list = lm_robust(Y_weighted  ~ TUUNGANE,
+                           #removed interaction because genVilldiff() calculates outcome as difference 
+                           data     = genVilldiff("qr2830_list_experiment", ind),
+                           weights  = VILL_WEIGHT),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE, 
+                           data     = vill,
+                           weights  = VILL_WEIGHT),
+  
+  chief_domin  = lm_robust(Y_weighted ~ TUUNGANE,
+                           #removed interaction because genVilldiff() calculates outcome as difference
+                           data     = genVilldiff("Correct_B_projet", ind),
+                           weights  = VILL_WEIGHT),
+  part  =  lm_robust(PART_A1   ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = vill, weights = VILL_WEIGHT),
+  compl = lm_robust(Y_weighted ~ TUUNGANE,
+                    data =  genVillmeans("MFI_COMPLAINTS", ind), weights = VILL_WEIGHT),
+  corr  = lm_robust(Y_weighted   ~ TUUNGANE,
+                    data =  genVillmeans("qr002CORRECT", ind), weights = VILL_WEIGHT),
+  accep = lm_robust(Y_weighted  ~ TUUNGANE,
+                    data =  genVillmeans("qi003_accept", ind), weights = VILL_WEIGHT),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = vill, weights = VILL_WEIGHT)
+)
+
+robust_village_level <- mapply(tidy_results, robust_village_level, names(robust_village_level)) %>% t()
+robust_village_level[,3] <- paste0("(", robust_village_level[,3], ")")
+robust_village_level <- splice_sds(robust_village_level[,2:3])
+
+
+# 3: NO Lott Bins
+robust_lott_bins <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE,
+                            data     =  vill, 
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(qr026i_fund_misuse ~ TUUNGANE,
+                           data     = ind, 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(qr2830_list_experiment  ~ TUUNGANE + RA + RA*TUUNGANE, 
+                           data     = ind,
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE, 
+                           data     = vill,
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(Correct_B_projet ~ TUUNGANE + CHIEF + CHIEF*TUUNGANE, 
+                           data     = ind,
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT),
+  part  =  lm_robust(PART_A1   ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = vill, weights = VILL_WEIGHT),
+  compl = lm_robust(MFI_COMPLAINTS ~ TUUNGANE,
+                    data =  ind, weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  corr  = lm_robust(qr002CORRECT   ~ TUUNGANE,
+                    data =  ind, weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accep = lm_robust(qi003_accept  ~ TUUNGANE,
+                    data =  ind, weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = vill, weights = VILL_WEIGHT)
+)
+
+robust_lott_bins <- mapply(tidy_results, robust_lott_bins, names(robust_lott_bins)) %>% t()
+robust_lott_bins[,3] <- paste0("(", robust_lott_bins[,3], ")")
+robust_lott_bins <- splice_sds(robust_lott_bins[,2:3])
+
+# Results (at the village level) using propensity weights adjusted to assess village level sample average treatment effects
+# rather than sate average treatment effects.
+robust_prop_weight <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE,
+                            data     = vill, 
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(Y_unweighted ~ TUUNGANE,
+                           data     = genVillmeans("qr026i_fund_misuse", ind), 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(Y_unweighted  ~ TUUNGANE, 
+                           data     = genVilldiff("qr2830_list_experiment", ind),
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE, 
+                           data     = vill,
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(Y_unweighted ~ TUUNGANE, 
+                           data     = genVilldiff("Correct_B_projet", ind),
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT),
+  part  =  lm_robust(PART_A1   ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     data = vill, weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = vill, weights = VILL_WEIGHT),
+  compl = lm_robust(Y_unweighted ~ TUUNGANE,
+                    data =  genVillmeans("MFI_COMPLAINTS", ind), 
+                    weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  corr  = lm_robust(Y_unweighted   ~ TUUNGANE,
+                    data =  genVillmeans("qr002CORRECT", ind),
+                    weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accep = lm_robust(Y_unweighted  ~ TUUNGANE,
+                    data =  genVillmeans("qi003_accept", ind),
+                    weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = vill, weights = VILL_WEIGHT)
+)
+
+robust_prop_weight <- mapply(tidy_results, robust_prop_weight, names(robust_prop_weight)) %>% t()
+robust_prop_weight[,3] <- paste0("(", robust_prop_weight[,3], ")")
+robust_prop_weight <- splice_sds(robust_prop_weight[,2:3])
+
+# Main results
+robust_main_results <- mapply(tidy_results, main_results, names(main_results)) %>% t()
+robust_main_results[,3] <- paste0("(", robust_main_results[,3], ")")
+robust_main_results <- splice_sds(robust_main_results[,2:3])
+
+# Mechanism results
+robust_mechanisms <- mapply(tidy_results, mechanisms, names(mechanisms)) %>% t()
+robust_mechanisms[,3] <- paste0("(", robust_mechanisms[,3], ")")
+robust_mechanisms <- splice_sds(robust_mechanisms[,2:3])
+
+robust_main_results <- rbind(robust_main_results, robust_mechanisms)
+
+
+```
+
+```{r, include=FALSE}
+varnames_ <- c(varnames, varnames)
+varnames_[ 1:length(varnames_) %% 2 != 0] <- varnames
+varnames_[ 1:length(varnames_) %% 2 == 0] <- ""
+```
+
+```{r print_tab9}
+kable(cbind(varnames_, robust_main_results, robust_alt_treatment, robust_village_level, robust_lott_bins, robust_prop_weight), col.names = c("", "Base", "Alt. Treat", "Village (weighted)", "No block FE", "Village (unweighted)"))
+```
+
+# Table 10: Heterogeneous Effects by Initial Institutions
+
+```{r}
+# schools
+noschools <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE,
+                            data     = subset(vill, NOSCHOOLS==1), 
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(qr026i_fund_misuse ~ TUUNGANE,
+                           data     = subset(ind, NOSCHOOLS==1), 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(qr2830_list_experiment  ~ TUUNGANE + RA + RA*TUUNGANE, 
+                           data     = subset(ind, NOSCHOOLS==1),
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE, 
+                           data     = subset(vill, NOSCHOOLS==1),
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(Correct_B_projet ~ TUUNGANE + CHIEF + CHIEF*TUUNGANE, 
+                           data     = subset(ind, NOSCHOOLS==1),
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT),
+  part  =  lm_robust(PART_A1   ~ TUUNGANE,
+                     data = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE,
+                     data = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE,
+                     data = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     data = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT),
+  compl = lm_robust(MFI_COMPLAINTS ~ TUUNGANE,
+                    data =  subset(ind, NOSCHOOLS==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  corr  = lm_robust(qr002CORRECT   ~ TUUNGANE,
+                    data =  subset(ind, NOSCHOOLS==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accep = lm_robust(qi003_accept  ~ TUUNGANE,
+                    data =  subset(ind, NOSCHOOLS==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = subset(vill, NOSCHOOLS==1), weights = VILL_WEIGHT))
+
+robust_noschools <- mapply(tidy_results, noschools, names(noschools)) %>% t()
+robust_noschools[,3] <- paste0("(", robust_noschools[,3], ")")
+robust_noschools <- splice_sds(robust_noschools[,2:3])
+
+# inherited
+inherited <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE,
+                            data     = subset(vill, INHERITED==1), 
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(qr026i_fund_misuse ~ TUUNGANE,
+                           data     = subset(ind, INHERITED==1), 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(qr2830_list_experiment  ~ TUUNGANE + RA + RA*TUUNGANE, 
+                           data     = subset(ind, INHERITED==1),
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE, 
+                           data     = subset(vill, INHERITED==1),
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(Correct_B_projet ~ TUUNGANE + CHIEF + CHIEF*TUUNGANE, 
+                           data     = subset(ind, INHERITED==1),
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT),
+  part  =  lm_robust(PART_A1   ~ TUUNGANE,
+                     data = subset(vill, INHERITED==1), weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE,
+                     data = subset(vill, INHERITED==1), weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = subset(vill, INHERITED==1), weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE,
+                     data = subset(vill, INHERITED==1), weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     data = subset(vill, INHERITED==1), weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = subset(vill, INHERITED==1), weights = VILL_WEIGHT),
+  compl = lm_robust(MFI_COMPLAINTS ~ TUUNGANE,
+                    data =  subset(ind, INHERITED==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  corr  = lm_robust(qr002CORRECT   ~ TUUNGANE,
+                    data =  subset(ind, INHERITED==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accep = lm_robust(qi003_accept  ~ TUUNGANE,
+                    data =  subset(ind, INHERITED==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = subset(vill, INHERITED==1), weights = VILL_WEIGHT))
+
+robust_inherited <- mapply(tidy_results, inherited, names(inherited)) %>% t()
+robust_inherited[,3] <- paste0("(", robust_inherited[,3], ")")
+robust_inherited <- splice_sds(robust_inherited[,2:3])
+
+# committees
+nocommittee <- list(
+  
+  fin_irregul  =  lm_robust(da109_not_verifiable ~ TUUNGANE,
+                            data     = subset(vill, NOCOMMITTEE==1), 
+                            weights  = VILL_WEIGHT),
+  
+  embezzl_dir  = lm_robust(qr026i_fund_misuse ~ TUUNGANE,
+                           data     = subset(ind, NOCOMMITTEE==1), 
+                           weights  = VILL_WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(qr2830_list_experiment  ~ TUUNGANE + RA + RA*TUUNGANE, 
+                           data     = subset(ind, NOCOMMITTEE==1),
+                           weights  = VILL_WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(stdev_benefits ~ TUUNGANE, 
+                           data     = subset(vill, NOCOMMITTEE==1),
+                           weights  = VILL_WEIGHT ),
+  
+  chief_domin  = lm_robust(Correct_B_projet ~ TUUNGANE + CHIEF + CHIEF*TUUNGANE, 
+                           data     = subset(ind, NOCOMMITTEE==1),
+                           clusters = IDS_CDCCODE,
+                           weights  = VILL_WEIGHT),
+  part  =  lm_robust(PART_A1   ~ TUUNGANE,
+                     data = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT),
+  inter =  lm_robust(N_INTERV  ~ TUUNGANE,
+                     data = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT),
+  male_d = lm_robust(MALE_DOM  ~ TUUNGANE,
+                     data = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT),
+  sel    = lm_robust(MFI_SELECTION ~ TUUNGANE,
+                     data = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT),
+  compos = lm_robust(MFI_COMPOSITION ~ TUUNGANE,
+                     data = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT),
+  mech   = lm_robust(MFI_MECHANISMS  ~ TUUNGANE,
+                     data  = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT),
+  compl = lm_robust(MFI_COMPLAINTS ~ TUUNGANE,
+                    data =  subset(ind, NOCOMMITTEE==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  corr  = lm_robust(qr002CORRECT   ~ TUUNGANE,
+                    data =  subset(ind, NOCOMMITTEE==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accep = lm_robust(qi003_accept  ~ TUUNGANE,
+                    data =  subset(ind, NOCOMMITTEE==1), weights = VILL_WEIGHT, clusters = IDS_CDCCODE ),
+  accoun = lm_robust(MFI_ACCOUNTING ~ TUUNGANE,
+                     data  = subset(vill, NOCOMMITTEE==1), weights = VILL_WEIGHT))
+
+robust_nocommittee <- mapply(tidy_results, nocommittee, names(nocommittee)) %>% t()
+robust_nocommittee[,3] <- paste0("(", robust_nocommittee[,3], ")")
+robust_nocommittee <- splice_sds(robust_nocommittee[,2:3])
+
+
+kable( cbind(varnames_, robust_main_results, robust_noschools, robust_nocommittee, robust_inherited),
+       col.names = c("", "Base", "No School", "Inherited", "No Committee"))
+```
+
+Script to output tables to .tex files.
+```{r}
+source("Code/3.3 Output_Robustness.R")
+
+if(saving){
+  sink(paste0(output_folder, "/Table9_Robust.tex"))
+  tablr(T6)
+  sink()
+  
+  sink(paste0(output_folder, "/Table10_Hetero.tex"))
+  tablr(T7)
+  sink()
+}
+
+```
+
+# Figure 1: Map Tuungane Treatment and Control
+
+```{r, eval = with_GPS}
+gps2 <- GPS
+gps2 <- left_join(gps2, vill[,c("IDV", "IDV_RAPID")])
+
+coordinates(gps2) <- gps2[,c("longitude","latitude")]
+proj4string(gps2) <- CRS("+init=epsg:4326")
+
+col <- spTransform(col, CRSobj = CRS(proj4string(gps2)))
+
+#generate plot
+xlim <- gps2@bbox[1,] + c(3, 0)
+ylim <- gps2@bbox[2,] + c(-1, 1)
+
+map_tuungane <- function(){
+  par(mar = c(0.5, 0.5, 0.5, 0.5))
+  plot(col, xlim = xlim, ylim = ylim, lwd = .1)
+  plot(gps2, add=TRUE, #pch = 21, 
+       pch = c(21, 24)[factor(gps2$IDV_RAPID)],
+       bg = alpha(c("white", "black")[factor(gps2$TUUNGANE)], .6), cex = .4, lwd = .7)
+  text(x=c(26.7, 28.5, 28, 26.4), y = c(-3.8,-3.7, -6.8, -9), labels = c("Maniema", "South Kivu", "Tanganyika", "Haut Katanga"), cex = .8)
+  box()
+  scalebar(200, xy = c(29.6, -11.5), type = "bar", below = "km", 
+           lwd = 3, divs = 3, cex = .6)
+  legend(29, -8.7, legend=c("Tuungane and RAPID", "Tuungane only", "RAPID only", "None"),
+         pch = c(24, 21, 24, 21),
+         pt.bg = alpha(c("black","black","white","white"), .6), bty = "n",
+         cex = .6, pt.cex = .8, text.width = 1.5, y.intersp = 1, x.intersp = .8, 
+         inset=0.05)
+  # legend(29.6, -10, legend = c("Rapid", "Control"),
+  #        pch = c(24, 24), bty = "n",
+  #        cex = .8, pt.cex = 1.2, text.width = 1.5, y.intersp = 1, x.intersp = .8, 
+  #        inset=0.05)
+}
+
+map_tuungane()
+
+#output map to .pdf
+if(saving){
+  pdf(paste0(output_folder, "/Fig1_TuunganeMap.pdf"), width = 3, height = 5)
+  map_tuungane()
+  dev.off()
+}
+
+```
+
+# Figure 2: Timeline
+
+```{r, include = TRUE}
+
+DIS = unique(D$DISTRICT)
+DISTRICT=D$DISTRICT
+CHEF = D$CHEF
+
+fig_timeline <- function(){
+  par(mfrow=c(2,2))
+  
+  T1a = 	as.Date(D$lottery_date_med, origin="1960-01-01")
+  T1b = 	as.Date(D$T1_end_cdv_med, origin="1960-01-01")
+  T1c = 	as.Date(D$T1_end_cdc_med, origin="1960-01-01") 
+  Ra = 	as.Date(D$stepA, origin="1960-01-01")
+  Rb = 	as.Date(D$stepD, origin="1960-01-01")
+  up = .2
+  #	lshift = 320
+  lshift = 800
+  
+  RANGE=c(min(T1a), max(Rb,T1c))
+  RANGE2 = as.Date(seq(RANGE[1], RANGE[2], 60))
+  
+  DISTRICT[DISTRICT=="SUD KIVU"] <- "SOUTH KIVU"
+  D$DISTRICT[D$DISTRICT=="SUD KIVU"] <- "SOUTH KIVU"
+  DIS[DIS=="SUD KIVU"] <- "SOUTH KIVU"
+  
+  for(j in 1:length(DIS)){
+    CH = unique(CHEF[DISTRICT == DIS[j]])
+    DI = DIS[j]	
+    o = rank(T1a[DISTRICT == DIS[j]])
+    plot(RANGE, RANGE, main=DI, ylim = c(0, length(CH)+1), xlim=c(min(RANGE)-lshift, max(RANGE)), axes=F,  xlab="", ylab = "", cex.main=2)
+    axis(1, at=RANGE2, labels=format(RANGE2, "%b %Y"), las=1, tick=F, cex.axis=1.5)
+    box()
+    for(i in (1:length(CH))){
+      j = o[i]
+      # Thin line:
+      segments(T1a[CHEF==CH[i]],j, T1c[CHEF==CH[i]],j, col="black")
+      # Thick line:
+      segments(T1a[CHEF==CH[i]],j, T1b[CHEF==CH[i]],j, col="black", lwd=6)
+      # Red line:
+      segments(Ra[CHEF==CH[i]] ,j+up, Rb[CHEF==CH[i]],j+up, col="red", lwd=3)
+      text(min(RANGE)-lshift,j, CH[i], pos=4, cex=1.3)
+    }	
+  }
+  
+}
+
+fig_timeline()	
+```
+
+```{r}
+#output figure to .pdf
+if(saving){
+  pdf(file=paste0(output_folder, "/Fig2_Timeline.pdf"), width=13, height=15)
+  fig_timeline()	
+  dev.off()
+}
+```
+
+# Figure 3: Main Results
+
+Script plots main results.
+
+```{r}
+
+#rescale inequality of private benefits
+res_main_table <- main_table
+v <- which(rownames(main_table) %in% c("ineq_benef"))
+res_main_table[v, ] <- res_main_table[v, ]/10
+
+#rescale large mechanism vars
+v <- which(rownames(mechanisms_table) %in% c("part", "corr", "accep", "male_d","inter"))
+v2 <- which(rownames(mechanisms_table) %in% c("part"))
+res_mechanisms_table <- mechanisms_table
+res_mechanisms_table[v, ] <- res_mechanisms_table[v, ]/10
+res_mechanisms_table[v2, ] <- res_mechanisms_table[v2, ]/10
+
+plot_main <- function(b, se, rnames, title, side = 2){
+  xlimit <- max(abs(c(b-1.96*se, b+1.96*se)))
+  plot(x = b,
+       y = 1:length(b), xlim = c(-xlimit-.2, xlimit+.2),
+       xlab = "", pch = 19, axes = FALSE, ylim = c(.5,length(b)+.5),
+       ylab = "", main = title)
+  # text(x = min(b-1.96*se)-.8, y = 1:nrow(main_table), labels = rev(capture_var_names), pos = 4, cex = .8)
+  axis(1)
+  axis(2, at = 1:length(b), labels = rnames, las = 1, tick = FALSE, side = side)
+  segments(x0 = b-1.96*se, y0=1:length(b), x1 = b+1.96*se)
+  segments(x0 = b-1.96*se, y0=1:length(b), x1 = b+1.96*se)
+  abline(v=0, col = "grey")
+  # box()
+}
+
+PARTICIPATION_NAMES  <- mech_var_names[1:5]
+ACCOUNTABILITY_NAMES <- mech_var_names[6:7]
+TRANSPARENCY_NAMES   <- mech_var_names[8:10]
+
+
+fig_mechanisms <- function(){
+  # ticktextsize=1
+  mar.default <- c(4,14,4,2) + 0.1
+  par(mfrow = c(5,2),mar = mar.default + c(0, 2, 0, 0))
+  layout(matrix(c(1,1,1,3,3,2,2,2,4,4), ncol = 2))
+  
+  # par(mfrow=c(2,2),  mar=c(0,0,0,0))
+  
+  b  <- as.numeric(res_main_table[,"Effect"])
+  se <- as.numeric(gsub("\\(|\\)", "", res_main_table[,"std_error"]))
+  se_0  <- as.numeric(res_main_table[,"control.sd"])
+  plot_main(
+    rev(b),#/se_0),
+    rev(se),#/se_0),
+    rnames = rev(capture_var_names),
+    title = "Capture")#, tick=0.4, norm=1, ticktextsize=1)
+  
+  b  <- as.numeric(res_mechanisms_table[ c("part", "inter", "male_d", "sel", "compos"), "Effect" ])
+  se <- as.numeric(gsub("\\(|\\)", "", res_mechanisms_table[c("part", "inter", "male_d", "sel", "compos"), "std_error"]))
+  se_0 <-  as.numeric(res_mechanisms_table[ c("part", "inter", "male_d", "sel", "compos"), "control.sd" ])
+  plot_main(
+    rev(b),#/se_0), 
+    rev(se),#/se_0), 
+    rnames=    rev(PARTICIPATION_NAMES), 
+    title = "Participation")#, tick=.3, norm=1, ticktextsize=1)
+  
+  
+  b  <- as.numeric(res_mechanisms_table[ c("mech", "compl"),"Effect" ])
+  se <- as.numeric(gsub("\\(|\\)", "", mechanisms_table[c("mech", "compl"), "std_error"]))
+  se_0 <-  as.numeric(res_mechanisms_table[ c("mech", "compl"), "control.sd" ])
+  plot_main(
+    rev(b),#/se_0), 
+    rev(se),#/se_0), 
+    rnames=    rev(ACCOUNTABILITY_NAMES), 
+    title = "Accountability")#, tick=.3, norm=1, ticktextsize=1)
+  
+  
+  b  <- as.numeric(res_mechanisms_table[ c("corr", "accep", "accoun"), "Effect" ])
+  se <- as.numeric(gsub("\\(|\\)", "", res_mechanisms_table[c("corr", "accep", "accoun" ), "std_error"]))
+  se_0   <- as.numeric(res_mechanisms_table[ c("corr", "accep", "accoun"), "control.sd" ])
+  plot_main(
+    rev(b),#/se_0), 
+    rev(se),#/se_0), 
+    rnames=    rev(TRANSPARENCY_NAMES), 
+    title = "Transparency")#, tick=.3, norm=1, ticktextsize=1)
+}
+
+fig_mechanisms()
+```
+
+```{r}
+#output figure to .pdf
+if(saving){
+  pdf(paste0(output_folder, "/Fig3_MainResults.pdf"), width = 11, height = 8)
+  fig_mechanisms()
+  dev.off()
+}
+
+```
+
+# Figure 4: Spillovers
+
+```{r, include = TRUE, eval=with_GPS}
+
+# This defines a "translucent white" and a  "translucent black"
+colors = c(rgb(1,1,1,.8), rgb(0,0,0,.8))
+
+# Tuungane vs Control
+TYPE1 =	1 +  1*(X$TUUNGANE==1) 
+col  = rainbow(2)
+table(TYPE1)
+
+# 5km data
+X5 = X[X$NOTEXTREME==1,]
+TYPE5 =1 +  1*(X5$TUUNGANE==1) + 2*(X5$INDIRECT==1) 
+col  = rainbow(4)
+table(TYPE5)
+
+# 20km data
+X20 = X20[X20$NOTEXTREME==1,]
+TYPE20 =1 +  1*(X20$TUUNGANE==1) + 2*(X20$INDIRECT==1) 
+col  = rainbow(4)
+table(TYPE20)
+
+proj4string(drc.map.test) <- CRS("+proj=longlat +datum=WGS84 +ellps=WGS84") 
+summary(drc.map.test) # This shows you the relevant coordinates to work from
+
+# Plot maps
+
+fig_spillovers <- function(){
+  # Plot Spillovers for example HK
+  pointsize = 1.5
+  par(mfrow=c(1,3))
+  plot(drc.map.test, xlim=c(26, 29), ylim=c(-11.8,-10)); title("All Units in Haut Katanga", cex.main=1.6)
+  for(j in sample(length(X$latitude))) points(X$longitude[j], X$latitude[j], bg=colors[TYPE1[j]], pch = 21, cex=pointsize)
+  lines(c(26.5,26.9),c(-12.2,-12.2), lwd=2)
+  lines(c(26.5,26.5),c(-12.15,-12.25), lwd=2, lend=2)
+  lines(c(26.9,26.9),c(-12.15,-12.25), lwd=2, lend=2)
+  text(26.9,-12.2, "50 KM", pos=4)
+  box()
+  
+  plot(drc.map.test, xlim=c(26, 29), ylim=c(-11.8,-10)); title("5km Spillover Effects Subsample", cex.main=1.6)
+  for(j in sample(nrow(X5))) {
+    if(X5$INDIRECT[j]==1) points(X5$longitude[j], X5$latitude[j], pch = 8, cex=pointsize, col = colors[2])
+    points(X5$longitude[j], X5$latitude[j], bg=colors[X5$TUUNGANE[j]+1], pch = 21, cex=pointsize)}
+  lines(c(26.5,26.9),c(-12.2,-12.2), lwd=2)
+  lines(c(26.5,26.5),c(-12.15,-12.25), lwd=2, lend=2)
+  lines(c(26.9,26.9),c(-12.15,-12.25), lwd=2, lend=2)
+  text(26.9,-12.2, "50 KM", pos=4)
+  box()
+  
+  plot(drc.map.test, xlim=c(26, 29), ylim=c(-11.8,-10)); title("20km Spillover Effects Subsample", cex.main=1.6)
+  for(j in sample(nrow(X20))) {
+    if(X20$INDIRECT[j]==1) points(X20$longitude[j], X20$latitude[j], pch = 8, cex=pointsize, col = colors[2])
+    points(X20$longitude[j], X20$latitude[j], bg=colors[X20$TUUNGANE[j]+1], pch = 21, cex=pointsize)}
+  lines(c(26.5,26.9),c(-12.2,-12.2), lwd=2)
+  lines(c(26.5,26.5),c(-12.15,-12.25), lwd=2, lend=2)
+  lines(c(26.9,26.9),c(-12.15,-12.25), lwd=2, lend=2)
+  text(26.9,-12.2, "50 KM", pos=4)
+  box()
+}
+```
+
+```{r, eval=with_GPS}
+
+if(saving){
+  pdf(file=paste0(output_folder, "/Fig4_Spillovers.pdf"), width=12, height=4) 
+  fig_spillovers()
+  dev.off()
+}
+
+```
+
+# Figure 6: Minimal Detectable Effects
+
+```{r, echo=FALSE}
+saveRDS(vill, "Data/vill.RDS")
+set.seed(1)
+vill <- readRDS(file = "Data/vill.RDS")
+```
+
+Below we calculate power under different absolute value of ATE for financial irregularities based on a simulation approach using the package `DeclareDesign`. We formally declare our data structure, our potential outcomes, assignment scheme, our estimand and estimators.
+
+We calculate residuals from the regression of financial irregularity on the Tuungane treatment with block fixed effects among the control 
+
+<!-- For dependent variables outcomes such as financial irregularities, we draw potential outcomes for control ($Y[Z=0]$) from observed outcomes in the control sample. In the data generating process, we assume $Y[Z=1] = Y[Z=0] + \tau + \epsilon$ where $\tau$ is the average treatment effect and $\epsilon$ the error at the village level (unit of analysis) normally distributed around a mean of 0, with standard deviation of 1. -->
+
+<!-- Note: Here another approach would be to specify ($Y[Z=0]$) for a given cluster as the block-level average with a normally distributed error term for the village.  -->
+
+```{r}
+df = vill
+dv = "da109_not_verifiable"
+
+cols <- c("TUUNGANE", "WEIGHT", "LOTT_BIN",
+          "IDV", "IDV_CDCCODE", "IDS_CDCCODE",
+          "CHIEF", "qr026i_fund_misuse", "res",
+          "da109_not_verifiable")
+dat <- df[, intersect(names(df), cols)]
+dat <- dat %>% arrange(LOTT_BIN)
+
+#residuals of village-level obs in control
+dat0 <- dat[dat$TUUNGANE == 0 & !is.na(dat[[dv]]),]
+dat0$dv <- dat0[[dv]]
+m <- lm(dv ~ TUUNGANE + as.factor(LOTT_BIN), data = dat0, weights = dat0$WEIGHT)
+dat0$res <- m$residuals
+
+# Declare Tuungane Design
+design_tuungane <- function(ate){
+  
+  #duplicate control data (note 1/3 outcomes missing for "da109_not_verifiable")
+  dat01 <- dat0
+  dat01$IDV <- paste0("dup", dat0$IDV)
+  dat <- rbind(dat01,dat0)
+  
+  U <- declare_population(data = dat)
+  
+  Y <- declare_potential_outcomes(
+    Y_Z_0 = res,
+    Y_Z_1 = ate + res
+  )
+  
+  per_block <- as.data.frame(table(dat$LOTT_BIN))$Freq / 2
+  
+  Z <- declare_assignment(blocks = LOTT_BIN, block_m = per_block)
+  
+  R <- declare_reveal(Y, Z)
+  
+  Q <- declare_estimand(ATE = mean(Y_Z_1 - Y_Z_0, na.rm = TRUE))
+  
+  
+  B <- declare_estimator(Y ~ Z, #weights = ipw,
+                         estimand = Q,
+                         model = lm_robust,
+                         label = "tuungane_estimator")
+  
+  
+  design <- U + Y + Z + R  + Q + B #get_weights
+  return(design)
+}
+
+```
+
+We then run 500 simulations of this design assuming ATEs ranging [0, 0.2] to estimate statistical power.
+
+```{r}
+
+d1_fin_irreg <- design_tuungane(ate = 0)
+ates = seq(0, .2, length = 7)
+d1s <- redesign(d1_fin_irreg, ate = ates)
+diagnoses1 <- diagnose_design(d1s, bootstrap_sims = 0)
+
+mde_plot(diagnoses1, "Financial Irregularities", xlim = c(0,.2))
+
+if(saving){
+  pdf(paste0(output_folder, "/Fig6_MDE_FinIrreg.pdf"), width = 5, height = 4)
+  mde_plot(diagnoses1, "Financial Irregularities", xlim = c(0,.2))
+  dev.off()
+}
+```
+
+# Figure 5: Information for Consort Chart
+
+We explore the number of LLUs visited and surveys conducted during Steps A and D.
+
+## Step A Information
+
+We consider a village as visited if anything was collected during Step A in that village. That is anything from (variable used): Step A enumerator survey (a_3_date_village_entry), Step A chief survey (ac_3_date), Step A village meeting survey (am_3_ag_date), or at least one of Step A's household surveys (av_10_gender).
+
+```{r}
+
+#join indiviual and village data
+ABD <- left_join(ind, vill, by = intersect(names(ind), names(vill)) )
+
+# household survey to village level
+av10<-aggregate(av_10_gender ~ IDV, data=ABD, function(x) {sum(!is.na(x))}, na.action = NULL)
+colnames(av10) <- c("IDV","av10")
+ABD <- left_join(ABD, av10, by="IDV")  
+
+ABD$StepA <- ( !(ABD$a_3_date_village_entry=="") | !(ABD$ac_3_date=="") | !(ABD$am_3_ag_date=="") | ABD$av10>0) 
+
+# LLU visited
+stepA_Total<-length(ABD$StepA[ABD$StepA==1 & ABD$vill==1])
+stepA_Tuungane <-length(ABD$StepA[ABD$StepA==1 & ABD$vill==1 & ABD$TUUNGANE==1])
+stepA_Control <-length(ABD$StepA[ABD$StepA==1 & ABD$vill==1 & ABD$TUUNGANE==0])
+
+```
+
+How many household surveys were collected during Step A?
+
+```{r}
+
+# Take the most complete variable of the Step A household survey: av_10_gender
+
+stepA_HHs <- length(ABD$av_10_gender[!is.na(ABD$av_10_gender)])    
+stepA_HHs_Tuungane <- length(ABD$av_10_gender[!is.na(ABD$av_10_gender) & ABD$TUUNGANE==1])    
+stepA_HHs_Control <- length(ABD$av_10_gender[!is.na(ABD$av_10_gender) & ABD$TUUNGANE==0])
+
+stepA_HHs
+stepA_HHs_Tuungane
+stepA_HHs_Control
+
+```
+
+
+## Step B Information
+
+We consider a village as visited if anything was collected during Step B in that village. 
+
+```{r, warning=FALSE}
+
+ABD$StepB <- (!(ABD$b_3_date==""))
+ABD %<>% group_by(IDV) %>% mutate(vill = row_number()) %>% ungroup()
+
+# LLU visited
+stepB_Total<-length(ABD$StepB[ABD$StepB==1 &  ABD$vill==1])
+stepB_Tuungane<-length(ABD$StepB[ABD$StepB==1  & ABD$vill==1  & ABD$TUUNGANE==1])
+stepB_Control<-length(ABD$StepB[ABD$StepB==1  & ABD$vill==1  & ABD$TUUNGANE==0])
+
+stepB_Total
+stepB_Tuungane
+stepB_Control
+
+```
+
+
+## Step D Information
+
+We consider a village as visited if anything was collected during Step D in that village. That is anything from (variable used): the Step D chief survey (cq007_date), or at least one of Step D's household surveys (q000_consent_beg).
+
+```{r}
+
+# household survey to village level
+q11<-aggregate(q011_sex ~ IDV, data=ABD, function(x) {sum(!is.na(x))}, na.action = NULL)
+colnames(q11) <- c("IDV","q11")
+ABD <- merge(ABD, q11, by="IDV", all=TRUE)  
+
+ABD$StepD <- (!(ABD$cq007_date=="") | ABD$q11>0)
+
+# Total Step D 
+stepD_Total<-length(ABD$StepD[ABD$StepD==1 & ABD$vill==1])
+
+
+stepD_TuuRapid <- length(ABD$StepD[ABD$StepD==1 & ABD$vill==1 & ABD$TUUNGANE==1 & ABD$IDS_RAPID==1])
+stepD_TuuNotrapid <- length(ABD$StepD[ABD$StepD==1 & ABD$vill==1 & ABD$TUUNGANE==1 & ABD$IDS_RAPID==0])
+stepD_ControlRapid <- length(ABD$StepD[ABD$StepD==1 & ABD$vill==1 & ABD$TUUNGANE==0 & ABD$IDS_RAPID==1])
+stepD_ControlNotrapid <- length(ABD$StepD[ABD$StepD==1 & ABD$vill==1 & ABD$TUUNGANE==0 & ABD$IDS_RAPID==0])
+
+# Missing LLUs by province
+
+missD_TuuRapid<-table(ABD$StepD[ABD$vill==1 & ABD$IDS_RAPID==1 & ABD$TUUNGANE==1], ABD$IDS_DISTRICT[ABD$vill==1 & ABD$IDS_RAPID==1  & ABD$TUUNGANE==1])
+missD_TuuNotrapid<-table(ABD$StepD[ABD$vill==1 & ABD$IDS_RAPID==0 & ABD$TUUNGANE==1], ABD$IDS_DISTRICT[ABD$vill==1 & ABD$IDS_RAPID==0  & ABD$TUUNGANE==1])
+missD_ControlRapid<-table(ABD$StepD[ABD$vill==1 & ABD$IDS_RAPID==1 & ABD$TUUNGANE==0], ABD$IDS_DISTRICT[ABD$vill==1 & ABD$IDS_RAPID==1  & ABD$TUUNGANE==0])
+missD_ControlNotrapid<-table(ABD$StepD[ABD$vill==1 & ABD$IDS_RAPID==0 & ABD$TUUNGANE==0], ABD$IDS_DISTRICT[ABD$vill==1 & ABD$IDS_RAPID==0  & ABD$TUUNGANE==0])
+
+stepD_Total
+stepD_TuuRapid
+stepD_TuuNotrapid
+stepD_ControlRapid
+stepD_ControlNotrapid
+
+missD_TuuRapid
+missD_TuuNotrapid
+missD_ControlRapid
+missD_ControlNotrapid
+
+```
+
+
+How many panel household surveys were collected during Step D (RAPID villages only)?
+
+```{r}
+
+# Take the most complete variable of the Step D household survey: q011_sex
+
+stepD_Panel_Tuungane <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DMC" & ABD$TUUNGANE==1])    
+
+stepD_Panel_Control <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DMC" & ABD$TUUNGANE==0])    
+
+stepD_Panel_Tuungane
+stepD_Panel_Control
+```
+
+How many additional household surveys were collected during Step D (RAPID and Survey-only villages)?
+
+```{r}
+
+# Take the most complete variable of the Step D household survey: q011_sex
+
+stepD_HH_TuuRap <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==1 & ABD$IDS_RAPID==1])    
+
+stepD_HH_TuuNotrapid <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==1 & ABD$IDS_RAPID==0])    
+
+stepD_HH_ControlRap <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==0 & ABD$IDS_RAPID==1])    
+
+stepD_HH_ControlNotrapid <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==0 & ABD$IDS_RAPID==0])    
+
+stepD_HH_TuuRap
+stepD_HH_TuuNotrapid
+stepD_HH_ControlRap
+stepD_HH_ControlNotrapid
+
+```
+
+How many willingness to collect information surveys were collected during Step D (RAPID and Survey-only villages)?
+
+```{r}
+
+# Take the most complete variable of the Step D household survey: q011_sex
+
+info_TuuRap <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==1 & ABD$IDS_RAPID==1])    
+
+info_TuuNotrapid <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==1 & ABD$IDS_RAPID==0])    
+
+info_ControlRap <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==0 & ABD$IDS_RAPID==1])    
+
+info_ControlNotrapid <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==0 & ABD$IDS_RAPID==0])    
+
+info_TuuRap
+info_TuuNotrapid
+info_ControlRap
+info_ControlNotrapid
+
+```
+
+# Additional statistics
+
+```{r}
+#Average share of women in committee in control and treatment
+vill %>% group_by(TUUNGANE) %>% summarize(share = mean(SHARE, na.rm = TRUE))
+
+#External accountability mechanism present
+mean(ABD_MERGE$DR_MECHANISMS_EXT, na.rm=T)
+
+#External accountability mechanism present and required to report to community
+mean(ABD_MERGE$DR_MECHANISMS_COMM, na.rm=T)
+
+#Accounting form present upon arrival of enumerators team
+mean(vill$da027_got_accounting_form, na.rm=T)
+
+#Funds accounted for RAPID committee
+mean(vill$ACCOUNTED_COMM, na.rm=T)
+
+#Funds accounted for adit teams
+mean(vill$ACCOUNTED_EVAL, na.rm=T)
+
+#Share of funds justified
+mean(vill$PART_JUSTIFIED, na.rm=T)
+
+#Share of funds credibly justified
+mean(vill$PART_CREDIBLY_JUSTIFIED, na.rm=T)
+
+#General pop guessed correct grant amount
+mean(ind$qr002CORRECT[!ind$CHIEF & ind$TUUNGANE==1], na.rm=TRUE)
+
+#Willing to seek information among control
+table(ind$qi003_accept[ind$TUUNGANE==0])
+
+#Why refused to seek information
+table(ind$qi004_why_not_accept[ind$qi003_accept==0&ind$TUUNGANE==0])
+
+#Committed elected
+mean(vill$ELECTIONS1[vill$IDV_RAPID==1])
+#Committee elected, lott or concensus
+mean(vill$ELECTIONS_LOTT_CON1[vill$TUUNGANE==1], na.rm=TRUE)
+
+#Project through election
+mean(vill$ELECTIONS2[vill$IDV_RAPID==1])
+mean(vill$ELECTIONS_LOTT_CON2[vill$TUUNGANE==1], na.rm=TRUE)
+
+#Spillover 5km
+table(gps$TUUNGANE, gps$indirect05)
+v <- !is.na(gps$gps_weight05); sum(v)
+table(gps$TUUNGANE[v], gps$indirect05[v])
+
+#Spillover 20km
+table(gps$TUUNGANE, gps$indirect20)
+v <- !is.na(gps$gps_weight20); sum(v)
+table(gps$TUUNGANE[v], gps$indirect20[v])
+
+#Spillover both
+sum(!is.na(gps$gps_weight20)&!is.na(gps$gps_weight05))
+```
+
+This concludes the replication file.

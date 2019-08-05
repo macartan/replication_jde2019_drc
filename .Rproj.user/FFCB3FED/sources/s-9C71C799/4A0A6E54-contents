@@ -1,0 +1,324 @@
+
+############################
+## PARTICIPATION
+############################
+
+
+###########
+#7 Meeting Attendance
+###########
+counter <- 7  # for trouble shooting
+
+ABD_VILL$am_16_women_end <- with(data = ABD_VILL,
+                                 expr =
+                                   ifelse(test = am_16_women_end > 2000, yes = NA, no = am_16_women_end))
+
+ABD_VILL_ATTEND_7 <- select(.data = ABD_VILL,
+                   IDV,
+                   IDV_CDCCODE,
+                   TUUNGANE,
+                   IRC_TUUNGANE,
+                   am_16_women_end,
+                   am_17_men_end,
+                   LOTT_BIN,
+                   NOSCHOOLS,
+                   INHERITED,
+                   NOCOMMITTEE,
+                   VILL_WEIGHT,
+                   PWEIGHT2,
+                   IDV_PROPENSITY_WEIGHT_ADJ)
+ABD_VILL_ATTEND_7$WEIGHT <- ABD_VILL_ATTEND_7$IDV_PROPENSITY_WEIGHT_ADJ*2 
+# <- USED FOR out_PART_A1 OK
+ABD_VILL_ATTEND_7 <- within(ABD_VILL_ATTEND_7, {PART_A1 = am_16_women_end+am_17_men_end})
+                            
+  
+###########
+#8 Intervention in Meetings
+#9 Dominance in Discussions
+###########
+counter <- 89  # for trouble shooting
+
+
+## Drop observations for which ad1_2_individual_id != 2. There are also 20 NAs
+
+AB_DISC <- dplyr::filter(.data = AB_DISC,
+                         ad1_2_individual_id != 2 | is.na(ad1_2_individual_id))  #6587 observations; 6607 if include NAs
+
+AB_DISC <- dplyr::mutate(.data = AB_DISC,
+                         CHIEF__N =
+                           ifelse(test = ad1_2_individual_id == 1 & ad1_3_gender == "male",
+                                  yes = 1,
+                                  no = NA))
+
+AB_DISC$CHIEF_N <- with(data = AB_DISC,
+                        unsplit(value = tapply(X = CHIEF__N, INDEX = IDV, FUN = sum, na.rm = TRUE),
+                                f = IDV))
+
+## Among the ad1_2_individual_id == 1 in each IDV, count the number of males and put that number
+#only for those units for which ad1_2_individual_id == 1 & ad1_3_gender == "male"
+AB_DISC$CHIEF__N <-
+  with(data = AB_DISC,
+       expr =
+         ifelse(test = ad1_2_individual_id == 1 & ad1_3_gender == "male",
+                yes = unsplit(value = tapply(CHIEF__N,
+                                             IDV,
+                                             sum,
+                                             na.rm = TRUE),
+                              f = IDV),
+                no = NA))
+
+## Recoding variable for ELDER
+AB_DISC <- dplyr::mutate(.data = AB_DISC,
+                         ELDER__N =
+                           ifelse(test =
+                                    ad1_4_aged == "yes" & ad1_2_individual_id != 1,
+                                  yes = 1,
+                                  no = NA))
+
+AB_DISC$ELDER_N <- with(data = AB_DISC,
+                        unsplit(value = tapply(X = ELDER__N, INDEX = IDV, FUN = sum, na.rm = TRUE),
+                                f = IDV))
+
+AB_DISC$ELDER__N <- with(data = AB_DISC,
+                         expr =
+                           ifelse(test =
+                                    ad1_4_aged == "yes" & ad1_2_individual_id != 1,
+                                  yes = unsplit(value = tapply(ELDER__N,
+                                                               IDV,
+                                                               sum,
+                                                               na.rm = TRUE),
+                                                f = IDV),
+                                  no = NA))
+
+## Recoding variable for INTERV
+
+AB_DISC <- dplyr::mutate(.data = AB_DISC,
+                         INTERV_ =
+                           ifelse(test = ad1_2_individual_id != 1, yes = 1, no = NA))
+
+AB_DISC$N_INTERV <- with(data = AB_DISC,
+                         unsplit(value = tapply(X = INTERV_, INDEX = IDV, FUN = sum, na.rm = TRUE),
+                                 f = IDV))
+
+## Recoding for INTERVM and INTERVF
+
+AB_DISC <- dplyr::mutate(.data = AB_DISC,
+                         N_INTERV_M =
+                           ifelse(test = ad1_3_gender == 1 & ad1_2_individual_id != 1,
+                                  yes = 1,
+                                  no = NA))
+
+# AB_DISC <- dplyr::mutate(.data = AB_DISC,
+#                         N_INTERV_M =
+#                           ifelse(test = ad1_3_gender == "male" & ad1_2_individual_id != 1,
+#                                  yes = 1,
+#                                  no = NA))
+
+AB_DISC$N_INTERVM <- with(data = AB_DISC,
+                          unsplit(value = tapply(X = N_INTERV_M, INDEX = IDV, FUN = sum, na.rm = TRUE),
+                                  f = IDV))
+
+AB_DISC <- dplyr::mutate(.data = AB_DISC,
+                         N_INTERV_F =
+                           ifelse(test = ad1_3_gender == "female" & ad1_2_individual_id != 1,
+                                  yes = 1,
+                                  no = NA))
+
+AB_DISC$N_INTERVF <- with(data = AB_DISC,
+                          unsplit(value = tapply(X = N_INTERV_F, INDEX = IDV, FUN = sum, na.rm = TRUE),
+                                  f = IDV))
+
+AB_DISC <- dplyr::mutate(.data = AB_DISC,
+                         MALE_DOM = N_INTERVM / (CHIEF_N + N_INTERV),
+                         ELDER_DOM = ELDER_N / (CHIEF_N + N_INTERV),
+                         CHIEF_DOM = CHIEF_N / (CHIEF_N + N_INTERV),
+                         FEMALE_DOM = - MALE_DOM,
+                         YOUNG_DOM = - ELDER_DOM,
+                         PLEB_DOM = - CHIEF_DOM,
+                         FEMALE_DOM = (FEMALE_DOM * 100),
+                         YOUNG_DOM = (YOUNG_DOM * 100),
+                         PLEB_DOM = (PLEB_DOM * 100),
+                         MALE_DOM = (MALE_DOM * 100),
+                         ELDER_DOM = (ELDER_DOM * 100),
+                         CHIEF_DOM = (CHIEF_DOM * 100),
+                         WEIGHT = (IDV_PROPENSITY_WEIGHT_ADJ * 2),
+                         LOTT_BIN = LOTT_BIN,
+                         NOSCHOOLS = NOSCHOOLS,
+                         INHERITED = INHERITED,
+                         NOCOMMITTEE = NOCOMMITTEE,
+                         VILL_WEIGHT = VILL_WEIGHT,
+                         TUUNGANE = TUUNGANE,
+                         IRC_TUUNGANE = IRC_TUUNGANE)
+
+## %<>% save back to data
+
+AB_DISC %<>%
+  group_by(IDV) %>%
+  filter(row_number(IDO) == 1)
+
+# <- USED FOR out_N_INTERV, out_MALE_DOM OK
+
+
+###########
+#10 Participatory Selection Methods
+###########
+counter <- 10  # for trouble shooting
+
+ABD_VILL$ELECTIONS1 <- with(data = ABD_VILL,
+                            expr = ifelse(test =
+                                            (b_32_elections_comittee_menFG3 > 0
+                                             &  !is.na(b_32_elections_comittee_menFG3))
+                                          | (b_32_elections_comittee_womenFG3 > 0
+                                             &  !is.na(b_32_elections_comittee_womenFG3)),
+                                          yes = 1, no = 0))
+
+ABD_VILL$ELECTIONS_LOTT1 <- with(data = ABD_VILL,
+                                 expr = ifelse(test =
+                                                 (b_32_elections_comittee_menFG3 > 0
+                                                  & !is.na(b_32_elections_comittee_menFG3))
+                                               | (b_32_elections_comittee_womenFG3 > 0
+                                                  &  !is.na(b_32_elections_comittee_womenFG3))
+                                               | (b_32_lottery_comittee_menFG3 > 0
+                                                  &  !is.na(b_32_lottery_comittee_menFG3))
+                                               | (b_32_lottery_comittee_womenFG3 > 0
+                                                  & !is.na(b_32_lottery_comittee_womenFG3)),
+                                               yes = 1, no = 0))
+
+ABD_VILL$ELECTIONS_LOTT_CON1 <- with(data = ABD_VILL,
+                                     expr = ifelse(test =
+                                                     ELECTIONS_LOTT1==1
+                                                   | (b_32_consensus_comittee_womenFG3 > 0
+                                                      | b_32_consensus_comittee_menFG3 > 0),
+                                                   yes = 1, no = 0))
+
+ABD_VILL$ELECTIONS2 <- with(data = ABD_VILL,
+                            expr = ifelse(test =
+                                            (b_33_election_project_menFG3 > 0
+                                             &  !is.na(b_33_election_project_menFG3))
+                                          | (b_33_election_project_womenFG3 > 0
+                                             &  !is.na(b_33_election_project_womenFG3)),
+                                          yes = 1, no = 0))
+
+ABD_VILL$ELECTIONS_LOTT2 <- with(data = ABD_VILL,
+                                 expr = ifelse(test =
+                                                 (b_33_election_project_menFG3 > 0
+                                                  &  !is.na(b_33_election_project_menFG3))
+                                               | (b_33_election_project_womenFG3 > 0
+                                                  &  !is.na(b_33_election_project_womenFG3))
+                                               | (b_33_lottery_project_menFG3 > 0
+                                                  &  !is.na(b_33_lottery_project_menFG3))
+                                               | (b_33_lottery_project_womenFG3 > 0
+                                                  & b_33_lottery_project_womenFG3!=0),
+                                               yes = 1, no = 0))
+
+ABD_VILL$ELECTIONS_LOTT_CON2 <-
+  with(data = ABD_VILL,
+       expr = ifelse(test =
+                       ELECTIONS_LOTT2==1
+                     | (b_33_consensus_project_menFG3 > 0
+                        | b_33_consensus_project_womenFG3 > 0),
+                     yes = 1, no = 0))
+
+ABD_VILL_SEL <- dplyr::filter(.data = ABD_VILL,
+                              !is.na(b_32_elections_comittee_menFG3)
+                              & !is.na(b_32_elections_comittee_womenFG3)
+                              & !is.na(b_32_consensus_comittee_womenFG3)
+                              & !is.na(b_32_consensus_comittee_menFG3)
+                              & !is.na(b_33_election_project_menFG3)
+                              & !is.na(b_33_consensus_project_menFG3)
+                              & !is.na(b_33_consensus_project_womenFG3)
+                              & !is.na(b_33_election_project_womenFG3))
+
+ABD_VILL_SEL %<>%
+  group_by(IDV) %>%
+  summarize(TUUNGANE, 
+            IRC_TUUNGANE,
+            ELECTIONS1, 
+            ELECTIONS2, 
+            ELECTIONS_LOTT_CON1,
+            ELECTIONS_LOTT_CON2, 
+            IDV_PROPENSITY_WEIGHT_ADJ, 
+            IDV_CDCCODE, 
+            LOTT_BIN,
+            NOSCHOOLS,
+            INHERITED,
+            NOCOMMITTEE,
+            PWEIGHT2,
+            VILL_WEIGHT)
+
+ABD_VILL_SEL <- dplyr::mutate(.data = ABD_VILL_SEL,
+                              ELECTIONS1 = (ELECTIONS1 * 100),
+                              ELECTIONS2 = (ELECTIONS2 * 100),
+                              ELECTIONS_LOTT_CON1 = (ELECTIONS_LOTT_CON1 * 100),
+                              ELECTIONS_LOTT_CON2 = (ELECTIONS_LOTT_CON2 * 100),
+                              WEIGHT = (IDV_PROPENSITY_WEIGHT_ADJ * 2))
+
+ABD_VILL_SEL$MFI_SELECTION <-
+  ABD_VILL_SEL %>%
+  data.frame %>%
+  wmeaneffects(.data = .,
+               .treat = "TUUNGANE",
+               .weight = "WEIGHT",
+               .outcomes = c("ELECTIONS1",
+                             "ELECTIONS2",
+                             "ELECTIONS_LOTT_CON1",
+                             "ELECTIONS_LOTT_CON2"),
+               .cond = "!is.na(TUUNGANE)",
+               .varname = "MFI_SELECTION") %>%
+  unlist %>%
+  as.vector
+  #weighted.mean(ABD_VILL_SEL$MFI_SELECTION[ABD_VILL_SEL$TUUNGANE==0], ABD_VILL_SEL$WEIGHT[ABD_VILL_SEL$TUUNGANE==0])
+
+# <- Used for out_SELECTION OK
+
+
+###########
+#11 Committee Composition
+###########
+counter <- 11  # for trouble shooting
+
+ABD_VILL_1 <- tidyr::gather(data = ABD_VILL,
+                            key = REP,
+                            value = b13_rep_gender,
+                            contains("b13_rep_gender"))
+ABD_VILL_1 %<>% filter(!is.na(b13_rep_gender))
+
+ABD_VILL_1 %<>%
+  group_by(IDV) %>%
+  dplyr::summarize(IDV_PROPENSITY_WEIGHT_ADJ = unique(IDV_PROPENSITY_WEIGHT_ADJ),
+                   TUUNGANE = unique(TUUNGANE),
+                   IRC_TUUNGANE = unique(IRC_TUUNGANE),
+                   IDV_CDCCODE = unique(IDV_CDCCODE),
+                   LOTT_BIN = unique(LOTT_BIN),
+                   NOSCHOOLS = unique(NOSCHOOLS),
+                   INHERITED = unique(INHERITED),
+                   NOCOMMITTEE = unique(NOCOMMITTEE),
+                   VILL_WEIGHT = unique(VILL_WEIGHT),
+                   PWEIGHT2 = unique(PWEIGHT2),
+                   N_FEM = sum((b13_rep_gender == 0) ,na.rm = TRUE),
+                   N_MAL = sum((b13_rep_gender == 1) ,na.rm = TRUE),
+                   TOT = n(),
+                   SHARE = sum((b13_rep_gender == 0) ,na.rm = TRUE)/n()) %>%
+  mutate(WEIGHT = IDV_PROPENSITY_WEIGHT_ADJ*2)
+
+dim(ABD_VILL_1)
+
+ABD_VILL_1$MFI_COMPOSITION <-
+  ABD_VILL_1 %>%
+  data.frame %>%
+  wmeaneffects(.data = .,
+               .treat = "TUUNGANE",
+               .weight = "WEIGHT",
+               .outcomes = c("N_FEM",
+                             "N_MAL",
+                             "TOT",
+                             "SHARE"),
+               .cond = "!is.na(TUUNGANE)",
+               .varname = "MFI_COMPOSITION") %>%
+  unlist %>%
+  as.vector
+
+# <- Used for out_COMPOSITION OK
+
+
+## END ##

@@ -1,0 +1,103 @@
+
+## Remaining:
+# hline above the bottom two lines without an empty row
+
+
+###########
+# Prep data
+###########
+
+.revalue_map <-
+  c("1 Strongly agree" = 6,
+    "2 Agree" = 5,
+    "3 Don't know" = 4,
+    "4 Indifferent" = 3,
+    "5 Against" = 2,
+    "6 Strongly against" = 1)
+
+ABD_INDIV %<>%
+  dplyr::mutate(q083_inconsistent_yes =
+                  plyr::revalue(q083_inconsistent_yes,
+                                .revalue_map) %>% as.integer,
+                q083_inconsistent_not =
+                  plyr::revalue(q083_inconsistent_not,
+                                .revalue_map) %>% as.integer) %>%
+  dplyr::filter(!is.na(q083_inconsistent_yes) | !is.na(q083_inconsistent_not)) %>%
+  dplyr::mutate(daccord1 = ifelse(is.na(q083_inconsistent_yes), NA, q083_inconsistent_yes>=5),
+                daccord0 = ifelse(is.na(q083_inconsistent_not), NA, q083_inconsistent_not>=5),
+                v5_is_PA = ifelse(v5_contradiction=="PA" | v5_contradiction=="PB",
+                                  v5_contradiction=="PA", NA),
+                FIRST_ANSWER = ifelse(v5_is_PA, daccord0, ifelse(!v5_is_PA, daccord1, NA)),
+                POS_PROMPT = 1 - v5_is_PA,
+                NEG_PROMPT = as.integer(v5_is_PA),
+                NOTUUNGANE = ifelse(is.na(TUUNGANE), NA, 1 - TUUNGANE),
+                WEIGHT = IDS_HH_SAMP_PROP_W_ANY,
+                IDS_TUUNGANE_POS = TUUNGANE*POS_PROMPT,
+                IDS_TUUNGANE_NEG = NOTUUNGANE*NEG_PROMPT) %>%
+  dplyr::select(TUUNGANE, NOTUUNGANE, POS_PROMPT,
+                NEG_PROMPT, FIRST_ANSWER, WEIGHT, IDS_CDCCODE,
+                IDS_TUUNGANE_POS,IDS_TUUNGANE_NEG, v5_is_PA)
+
+###########
+# Run regressions
+###########
+
+
+pos <- lm(FIRST_ANSWER ~  TUUNGANE + IDS_TUUNGANE_POS + POS_PROMPT, weights = WEIGHT, data = ABD_INDIV, na.action="na.exclude")
+pos <- cluster_robust(pos, ABD_INDIV["IDS_CDCCODE"][[1]])
+pos2 <-output_function(pos)
+
+neg <- lm(FIRST_ANSWER ~  TUUNGANE + IDS_TUUNGANE_NEG + NEG_PROMPT, weights = WEIGHT, data = ABD_INDIV, na.action="na.exclude")
+neg <- cluster_robust(neg, ABD_INDIV["IDS_CDCCODE"][[1]])
+neg2 <-output_function(neg)
+
+
+###########
+# create table. Data is 4x4
+###########
+
+# for SEs we use *2 so we get parentheses in
+
+OUTPUT_varnames <- c("Control", "\\textit{Tuungane}", "Difference", "(se)")
+OUTPUT <- array(NA, c(4,4))
+
+OUTPUT[1,1] <-round(pos[[1]][1,1],3)
+OUTPUT[2,1] <-round(pos[[1]][1,1] + pos[[1]][2,1],3)
+OUTPUT[3,1] <-round(pos[[1]][2,1],3)
+OUTPUT[4,1] <-pos2[2]
+
+OUTPUT[1,2] <-round(neg[[1]][1,1],3)
+OUTPUT[2,2] <-round(neg[[1]][1,1] + neg[[1]][2,1],3)
+OUTPUT[3,2] <-round(neg[[1]][2,1],3)
+OUTPUT[4,2] <-neg2[2]
+
+OUTPUT[1,3] <-round(pos[[1]][4,1],3)
+OUTPUT[2,3] <-round(-neg[[1]][4,1],3)
+OUTPUT[3,3] <-round(neg[[1]][3,1],3)
+OUTPUT[4,3] <- neg2[4]
+
+OUTPUT[1,4] <-pos2[6]
+OUTPUT[2,4] <-neg2[6]
+OUTPUT[3,4] <- ""
+OUTPUT[4,4] <- ""
+
+sd.Table <- rbind(
+  "\\begin{tabular}{lcc|cc}",
+  "	& Positive prompt &	Negative prompt	&	Difference & (se)\\\\ \\hline \\hline",
+  mat_to_tex(OUTPUT, rownames = OUTPUT_varnames),
+  "\\hline \\hline \\mc{5}{l}{\\parbox{4.8in}{\\small\\singlespace \\textit{Notes:} N=3,802. 
+  Share of individuals answering `yes' to the question ``Do you agree with the view that elections are the best way to choose community representatives
+    to serve in positions that require technical expertise?''
+  $* p \\le 0.10, ** p \\le 0.05, *** p \\le  0.01$.}}",
+  
+  "\\label{table_desirability}",
+  "\\end{tabular}"
+)
+
+sink("Output/Table_SocDes.tex")
+tablr(sd.Table)
+sink()
+
+## END ##
+
+

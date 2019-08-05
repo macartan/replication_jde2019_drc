@@ -1,0 +1,92 @@
+
+
+# load("Results/Main.RData")
+# attach(main.analysis)
+
+# Helpers
+# Functions to extract b and se (note position depends on whether model has interaction or not)
+extract_b     <-  function(x, interaction = FALSE) return(as.numeric(ifelse(interaction, x[[1]][4], x[[1]][2])))
+extract_se    <-  function(x, interaction = FALSE) return(as.numeric(ifelse(interaction, x[[1]][8], x[[1]][4])))
+extract_norm  <-  function(x) return(as.numeric(x[[2]][1,3]))
+
+# set up to extract either from a list and allow normalization
+extract_list = function(mylist, f = extract_b, normalize = TRUE){
+  as.numeric(as.matrix(lapply(mylist,  function(j) 
+    f(j, interaction = dim(j[[1]])[1]==4)/ifelse(normalize, extract_norm(j),1) )
+  ))       
+}
+
+# Illustrate
+CAPTURE <- list(main.analysis$out_da109,
+                main.analysis$out_embezDIR, 
+                main.analysis$out_embezRA, 
+                main.analysis$out_stdev_benefits,
+                main.analysis$out_right1)
+# extract_list(CAPTURE)
+# extract_list(CAPTURE, f = extract_se)
+
+fig_main <- function(){
+  ticktextsize=1
+  mat_plot(
+    rev(extract_list(CAPTURE)), 
+    rev(extract_list(CAPTURE, f = extract_se)), 
+    rnames=    rev(capture_var_names), 
+    title = "Capture", tick=.4, norm=1, ticktextsize=ticktextsize)
+}
+
+#####
+pdf("Output/coef_main.pdf", width = 11, height = 8)
+# NOTE THAT RESULTS ARE NORMALIZED BY CONTROL GROUP MEAN
+fig_main()
+dev.off()
+
+#####################################
+## MECHANISMS
+#####################################
+
+#out_da109[[1]][c(2,4)]
+
+
+PARTICIPATION <- list(main.analysis$out_PART_A1,main.analysis$out_N_INTERV,main.analysis$out_MALE_DOM,main.analysis$out_SELECTION, main.analysis$out_COMPOSITION)
+ACCOUNTABILITY<- list(main.analysis$out_MECHANISMS,main.analysis$out_COMPLAINTS) 
+EFFICIENCY    <- list(main.analysis$out_ACCOUNTING,main.analysis$out_SUM_HEALTH)
+TRANSPARENCY  <- list(main.analysis$out_qr002,main.analysis$out_qi003)
+
+PARTICIPATION_NAMES <- mech_var_names[1:5]
+ACCOUNTABILITY_NAMES <- mech_var_names[6:7]
+TRANSPARENCY_NAMES   <- mech_var_names[8:9]
+EFFICIENCY_NAMES     <- mech_var_names[10:11]
+
+fig_mechanisms <- function(){
+  ticktextsize=1
+  par(mfrow=c(2,2),  mar=c(1,1,1,1))
+  
+  mat_plot(
+    rev(extract_list(PARTICIPATION, normalize = TRUE)), 
+    rev(extract_list(PARTICIPATION, f = extract_se, normalize = TRUE)), 
+    rnames=    rev(PARTICIPATION_NAMES), 
+    title = "Participation", tick=.3, norm=1, ticktextsize=ticktextsize)
+  
+  mat_plot(
+    rev(extract_list(ACCOUNTABILITY)), 
+    rev(extract_list(ACCOUNTABILITY, f = extract_se)), 
+    rnames=    rev(ACCOUNTABILITY_NAMES), 
+    title = "Accountability", tick=.3, norm=1, ticktextsize=ticktextsize)
+  
+  mat_plot(
+    rev(extract_list(EFFICIENCY)), 
+    rev(extract_list(EFFICIENCY, f = extract_se)), 
+    rnames=    rev(EFFICIENCY_NAMES), 
+    title = "Efficiency", tick=.3, norm=1, ticktextsize=ticktextsize)
+  
+  mat_plot(
+    rev(extract_list(TRANSPARENCY)), 
+    rev(extract_list(TRANSPARENCY, f = extract_se)), 
+    rnames=    rev(TRANSPARENCY_NAMES), 
+    title = "Transparency", tick=.3, norm=1, ticktextsize=ticktextsize)
+}
+
+pdf("Output/coef_mech.pdf", width = 11, height = 8)
+fig_mechanisms()
+dev.off()
+

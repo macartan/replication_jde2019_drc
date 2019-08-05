@@ -1,0 +1,101 @@
+
+############################
+## TRANSPARENCY
+############################
+
+
+###########
+#14 Knowledge of Project Amount
+###########
+counter <- 14  # for trouble shooting
+
+ABD_INDIV_KNOWS <- ABD_INDIV
+ABD_INDIV_KNOWS %<>%
+  dplyr::filter(!(IDS_TYPES == "DC" | IDS_TYPES == "DCDV") & ## Deletes 2,240 obs
+                  !is.na(qr002_project_amount) &
+                  !(IDS_RAPID == 0) )
+
+ABD_INDIV_KNOWS %<>%
+  group_by(IDS) %>%
+  dplyr::summarize(qr002_project_amount,
+                   IRC_TUUNGANE,
+                   TUUNGANE,
+                   IDS_CDCCODE,
+                   IDS_HH_SAMP_PROP_W_ANY,
+                   IDV,
+                   LOTT_BIN,
+                   NOSCHOOLS,
+                   INHERITED,
+                   NOCOMMITTEE,
+                   PWEIGHT2,
+                   VILL_WEIGHT)
+
+ABD_INDIV_KNOWS %<>%
+  dplyr::mutate(qr002_project_amount =
+                  ifelse(test = qr002_project_amount == 9000 |
+                           qr002_project_amount == 900000 |
+                           qr002_project_amount == -900,
+                         yes = 900,
+                         no = qr002_project_amount),
+                qr002_project_amount =
+                  ifelse(test = qr002_project_amount == 10000 |
+                           qr002_project_amount == 1000000,
+                         yes = 1000,
+                         no = qr002_project_amount),
+                qr002_project_amount =
+                  ifelse(test = qr002_project_amount == 9,
+                         yes = -9,
+                         no = qr002_project_amount),
+                qr002_project_amount =
+                  ifelse(test = qr002_project_amount < 0,
+                         yes = NA,
+                         no = qr002_project_amount),
+                qr002CORRECT =
+                  ifelse(test = qr002_project_amount == 1000,
+                         yes = 100,
+                         no = 0),
+                qr002CORRECT =
+                  ifelse(test = is.na(qr002CORRECT),
+                         yes = 0,
+                         no = qr002CORRECT),
+                KNOWLEDGE_AMOUNT = qr002_project_amount,
+                DISTANCE_FROM_1000 =
+                  ifelse(test = KNOWLEDGE_AMOUNT >= 0,
+                         yes = abs(KNOWLEDGE_AMOUNT - 1000),
+                         no = 0),
+                WEIGHT = IDS_HH_SAMP_PROP_W_ANY * 2)
+
+###########
+#15 Willingness to Seek Information
+###########
+counter <- 15  # for trouble shooting
+
+ABD_INDIV_SEEKS <- ABD_INDIV
+
+ABD_INDIV_SEEKS %<>%
+  dplyr::mutate(WEIGHT = IDS_HH_SAMP_PROP_W_DML * 5 / 2) %>%
+  dplyr::mutate(qi003_accept =
+                  ifelse(IDS %in% c(113726, 224816, 417216, 430816, 434128),
+                         yes = NA,
+                         no = qi003_accept))
+
+# ABD_INDIV_SEEKS$LOTT_BIN <- ABD_INDIV_SEEKS$IDS_LOTT_BIN
+
+ABD_INDIV_SEEKS %<>%
+  group_by(IDS) %>%
+  dplyr::summarize(qi003_accept,
+                   TUUNGANE,
+                   IRC_TUUNGANE,
+                   WEIGHT,
+                   IDS_CDCCODE,
+                   LOTT_BIN,
+                   NOSCHOOLS,
+                   INHERITED,
+                   NOCOMMITTEE,
+                   VILL_WEIGHT,
+                   PWEIGHT2,
+                   IDS_HH_SAMP_WEIGHT_DML,
+                   IDV) %>%
+  mutate(qi003_accept = qi003_accept*100) %>%
+  dplyr::filter(!is.na(TUUNGANE))
+

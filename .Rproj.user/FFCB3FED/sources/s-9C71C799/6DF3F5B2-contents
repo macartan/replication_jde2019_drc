@@ -1,0 +1,37 @@
+## Project: Institutional Change by Imitation: Demonstrating the Practice of Democracy in Congolese Villages
+## Authors: Humphreys, Sanchez de la Sierra, van der Windt (2018)
+## Description: Regenerates map study map with treatment and control villages 
+## Date created: Tue Jun 26 13:09:02 2018 
+
+library(rgdal)
+library(raster)
+library(readstata13)
+
+#load shapefiles
+col <- readOGR("Data/shapefiles", "collectivite")
+
+#load Tuungane GIS files
+gps <- read.dta13("Data/gps/gps_tuungane.dta")
+coordinates(gps) <- gps[,c("longitude","latitude")]
+proj4string(gps) <- CRS("+init=epsg:4326")
+
+col <- spTransform(col, CRSobj = CRS(proj4string(gps)))
+
+#generate plot
+xlim <- gps@bbox[1,] + c(3, 0)
+ylim <- gps@bbox[2,] + c(-1, 1)
+
+map_tuungane <- function(){
+  par(mar = c(0.5, 0.5, 0.5, 0.5))
+  plot(col, xlim = xlim, ylim = ylim, lwd = .1)
+  plot(gps, add=TRUE, pch = c(1,16)[factor(gps$TUUNGANE)], cex = .4, lwd = .7)
+  box()
+  scalebar(200, xy = c(30, -11.5), type = "bar", below = "km", lwd = 3, divs = 3, cex = .8)
+  legend(29.6, -9, legend=c("Tuungane", "Control"),
+         pch = c(16, 1), bty = "n",
+         cex = .8, pt.cex = 1.2, text.width = 1.5, y.intersp = 1, x.intersp = .8, inset=0.05)
+}
+
+pdf("Output/Fig_Tuungane_chefferies.pdf", width = 3, height = 5)
+map_tuungane()
+dev.off()

@@ -1,0 +1,51 @@
+# Implement balance tests
+
+
+#DIST        <- merge(DIST, select(ABD_VILL, IDV, TUUNGANE, PWEIGHT2), by = "IDV")
+#DIST_BAL    <- with(DIST, balance_function(distance, TUUNGANE, PWEIGHT2))
+
+#PUBLIC      <- merge(PUBLIC, select(ABD_VILL, IDV, TUUNGANE, PWEIGHT2), by = "IDV")
+#PUBLIC_BAL  <- with(PUBLIC, balance_function(public2006, TUUNGANE, PWEIGHT2))
+
+#MIG         <- merge(MIG, select(ABD_VILL, IDV, TUUNGANE, PWEIGHT2), by = "IDV")
+#MIG_BAL     <- with(MIG, balance_function(mig2006, TUUNGANE, PWEIGHT2))
+
+# Not this one as it is conditional on presence of committee in 2012
+#COM         <- merge(COM, select(ABD_VILL, IDV, TUUNGANE, PWEIGHT2), by = "IDV")
+
+#COM_BAL     <- with(COM, balance_function(com2006, TUUNGANE, PWEIGHT2))
+#STATS         <- merge(STATS, select(ABD_VILL, IDV, TUUNGANE, PWEIGHT2), by = "IDV")
+#STATS_BALgender     <- with(STATS, balance_function(gender, TUUNGANE, PWEIGHT2))
+#STATS_BALage     <- with(STATS, balance_function(age, TUUNGANE, PWEIGHT2))
+
+
+#balance.table <- round(rbind(DIST_BAL, PUBLIC_BAL, MIG_BAL, COM_BAL, STATS_BALgender, STATS_BALage),2)
+#balance.table2 <- round(rbind(DIST_BAL, PUBLIC_BAL, MIG_BAL, STATS_BALage),2)
+
+
+balvars <-     c("Distance from major urban center", 
+                 "Presence of minerals",
+                 "Presence of infrastructure in 2006", 
+                 "Former chief enthroned by popular choice",
+                 "In-migration in 2006", 
+                 "Age")
+
+T_Balance <- rbind(
+  "\\begin{tabular}{lcccc}",
+  "	&	Control	&	\\textit{Tuungane}	&	d-stat	&	N	 \\\\ \\hline \\hline",
+  #  "\\mc{5}{c}{\\textbf{Village level}} \\\\ \\hline",
+  mat_to_tex(balance.table, rownames = balvars),
+  #  "\\hline \\mc{5}{c}{\\textbf{Individual level}} \\\\ \\hline",
+  "\\hline \\hline \\mc{5}{l}{\\parbox{4.8in}{\\small\\singlespace  
+  \\textit{Notes:} Based upon the following measures: QE13E, CQ20, CQ23-27, CQ48, CQ136-139, QF9. $d$-statistic is the difference in (weighted) means expressed in (weighted) standard deviations of the control group outcome.
+}
+  }",
+
+"\\label{table_balance}",
+"\\end{tabular}"
+)
+
+sink("Output/Table_Balance.tex")
+tablr(T_Balance)
+sink()
+

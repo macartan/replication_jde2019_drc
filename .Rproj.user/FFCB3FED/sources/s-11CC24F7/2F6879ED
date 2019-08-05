@@ -1,0 +1,23 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1530697478382.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "2F6879ED",
+    "lastKnownWriteTime" : 1529916908,
+    "last_content_update" : 1529916908,
+    "path" : "C:/Users/bicalho/Dropbox/Metaketa_Book_All/8 Replication/ch11_replication_files_clean/_Replicate_Metanalysis_Metaketa_1.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "chunk_output_type" : "console",
+        "cursorPosition" : "394,0",
+        "scrollLine" : "358"
+    },
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

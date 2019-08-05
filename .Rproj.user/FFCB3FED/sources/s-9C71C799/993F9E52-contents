@@ -1,0 +1,218 @@
+
+# Produces robustness table, and heterogeneous effects table
+
+splice_sds <- function(M) {
+  m <- nrow(M)
+  out <- matrix(NA, 2*m,1)
+  out[2*(1:m) - 1,1] <- M[,1]
+  out[2*(1:m),1] <- M[,2]
+  out
+}
+splice_sds(M = matrix(1:4,2))
+
+############################
+# Table 6: Robust Analyses: Base; Alternative treatment; Alternative specifications: village, bins, prop.; Spillover effects: D(5km), I(5km), D(20k), I(20k)
+############################
+
+## 1: Alternative treatment
+
+robust_alt_treatment <- list(
+  
+  fin_irregul  =  lm_robust(as.formula("da109_not_verifiable ~ IRC_TUUNGANE"),
+                            data     =  D_AUDIT_NOTVERI, 
+                            weights  = WEIGHT),
+  
+  embezzl_dir  = lm_robust(as.Formula("qr026i_fund_misuse ~ IRC_TUUNGANE"),
+                           data     = ABD_INDIV_DIRECT, 
+                           weights  = WEIGHT, 
+                           clusters = IDS_CDCCODE ),
+  
+  embezzl_list = lm_robust(as.formula("qr2729_list_experiment  ~ IRC_TUUNGANE + RA + RA*IRC_TUUNGANE"), 
+                           data     = ABD_INDIV_LIST,
+                           weights  = WEIGHT,
+                           clusters = IDS_CDCCODE),
+  
+  ineq_benef   = lm_robust(as.formula("stdev_benefits ~ IRC_TUUNGANE"), 
+                           data     = ABD_INDIV_BEN,
+                           weights  = WEIGHT ),
+  
+  chief_domin  = lm_robust(as.formula("Correct_D_projet ~ IRC_TUUNGANE + CHIEF + CHIEF*IRC_TUUNGANE"), 
+                           data     = CHIEF_DOM,
+                           clusters = IDS_CDCCODE,
+                           weights  = WEIGHT),
+  part  =  lm_robust(as.formula("PART_A1   ~ IRC_TUUNGANE"),
+                     data = ABD_VILL_ATTEND_7, weights = WEIGHT),
+  inter =  lm_robust(as.formula("N_INTERV  ~ IRC_TUUNGANE"),
+                     data = AB_DISC, weights = WEIGHT),
+  male_d = lm_robust(as.formula("MALE_DOM  ~ IRC_TUUNGANE"),
+                     data = AB_DISC, weights = WEIGHT),
+  sel    = lm_robust(as.formula("MFI_SELECTION ~ IRC_TUUNGANE"),
+                     data = ABD_VILL_SEL, weights = WEIGHT),
+  compos = lm_robust(as.formula("MFI_COMPOSITION ~ IRC_TUUNGANE"),
+                     data = ABD_VILL_1, weights = WEIGHT),
+  mech   = lm_robust(as.formula("MFI_MECHANISMS  ~ IRC_TUUNGANE"),
+                     data  = ABD_MERGE, weights = WEIGHT),
+  compl = lm_robust(as.formula("MFI_COMPLAINTS ~ IRC_TUUNGANE"),
+                    data =  ABD_INDIV_COMPLAINTS, weights = WEIGHT, clusters = IDS_CDCCODE ),
+  corr  = lm_robust(as.formula("qr002CORRECT   ~ IRC_TUUNGANE"),
+                    data =  ABD_INDIV_KNOWS, weights = WEIGHT, clusters = IDS_CDCCODE ),
+  accep = lm_robust(as.formula("qi003_accept  ~ IRC_TUUNGANE"),
+                    data =  ABD_INDIV_SEEKS, weights = WEIGHT, clusters = IDS_CDCCODE ),
+  accoun = lm_robust(as.formula("MFI_ACCOUNTING ~ IRC_TUUNGANE"),
+                     data  = D_AUDIT_ACCOUNT, weights = WEIGHT),
+  transm = lm_robust(as.formula("SUM_HEALTH_INFO ~ IRC_TUUNGANE + IDS_RAPID + IDS_RAPID*IRC_TUUNGANE"),
+                     data = ABD_INDIV_HEALTH, weights = WEIGHT, clusters = IDS_CDCCODE)
+)
+
+robust_alt_treatment_table <- mapply(function(x, name){ 
+  tidy = tidy.lm_robust(x); rownames(tidy) = tidy$term;
+  if( name ==  "embezzl_list" | name == "chief_domin" ) 
+    round(c(Control   = tidy[3, "estimate"],  
+            Effect    = tidy[4, "estimate"],  
+            std_error = tidy[4, "std.error"],
+            N         = x$N), 3)
+  if( name ==  "transm" ) 
+    round(c(Control   = tidy["IDS_RAPID",           "estimate"],  
+            Effect    = tidy["IRC_TUUNGANE:IDS_RAPID",  "estimate"],  
+            std_error = tidy["IRC_TUUNGANE:IDS_RAPID", "std.error"],
+            N         = x$N), 3)
+  else
+    round(c(Control  = tidy["(Intercept)", "estimate"],
+            Effect    = tidy["IRC_TUUNGANE", "estimate"], 
+            std_error = tidy["IRC_TUUNGANE", "std.error"], 
+            N         = x$N ),3)
+  
+}, robust_alt_treatment, names(robust_alt_treatment))
+
+robust_alt_treatment_table <- t(robust_alt_treatment_table)
+robust_alt_treatment_table[,3] <- paste0("(", robust_alt_treatment_table[,3], ")")
+robust_alt_treatment_col <- splice_sds(robust_alt_treatment_table[,2:3])
+
+# old ---------------------------------------------------------------------
+
+## 1: Alternative treatment
+robust_alt_treatment <-  all_analyses(.treatment = "IRC_TUUNGANE") # get correct name and make sure it is in all sub datasets
+robust_alt_treatment <- get.results.tab(robust_alt_treatment,
+                                        take = c(rep("IRC_TUUNGANE",2),"IRC_TUUNGANE:RA",rep("IRC_TUUNGANE",1),"IRC_TUUNGANE:CHIEFTRUE",rep("IRC_TUUNGANE",10),"IRC_TUUNGANE:IDS_RAPID"))
+#print("robust_alt_treatment")
+#print(splice_sds(robust_alt_treatment[,3:4]))
+robust_alt_treatment <- splice_sds(robust_alt_treatment[,3:4])
+
+# 2: Village level
+# All effects at the village level, where the variables are aggregated NOT using individual sampling weights 
+# If included these would be  IDS_PROPENSITY_WEIGHT_ADJ and IDV_PROPENSITY_WEIGHT_ADJ (same variable but first in DRC2012_ABD_VILL.dta and other in DRC2012_ABD_INDIV.dta)
+# The village level analysis is then done using propensity weights only
+# use "VILL_WEIGHT"
+robust_village_level <-  all_analyses(.village_level = TRUE, .weights = "VILL_WEIGHT")
+robust_village_level <- get.results.tab(robust_village_level,
+                                        take = c(rep("TUUNGANE", 15),"TUUNGANE:IDS_RAPID"), 
+                                        main = c(rep(NA,15),"IDS_RAPID"))
+robust_village_level <- splice_sds(robust_village_level[,3:4])
+
+# 3: Lott Bins
+robust_lott_bins     <-  all_analyses(.add.controls = "as.factor(LOTT_BIN)")
+robust_lott_bins <- get.results.tab(robust_lott_bins)
+robust_lott_bins <- splice_sds(robust_lott_bins[,3:4])
+
+# 4: Results (at the village level) using propensity weights adjusted to assess village level sample average treatment effects
+# rather than population average treatment effects.
+robust_prop_weight  <-  all_analyses(.village_level = TRUE, .weights = "PWEIGHT2")
+robust_prop_weight  <- get.results.tab(robust_prop_weight,
+                                       take = c(rep("TUUNGANE", 15),"TUUNGANE:IDS_RAPID"), 
+                                       main = c(rep(NA,16),"IDS_RAPID"))
+robust_prop_weight  <- splice_sds(robust_prop_weight[,3:4])
+
+## Create table
+
+mainanalysis <- splice_sds(get.results.tab(main.analysis)[,3:4])
+
+CONTENT <- cbind(mainanalysis, robust_alt_treatment, robust_village_level, robust_lott_bins, robust_prop_weight)
+
+T6 <- rbind(
+  "\\centering",
+  "\\scriptsize",
+  "\\begin{tabular}{lc|c|ccc}",
+  "	&      &              &	\\mc{3}{c}{Alt. Specifications}  \\\\ ",
+  "	& Base &	Alt. Treat. &	Village & Bins & Prop. \\\\ ",
+  "	& (se) &	(se)        &	(se)    & (se) & (se)  \\\\ \\hline \\hline",
+  #  "\\mc{6}{l}{\\textbf{Capture}} \\\\ \\hline",
+  mat_to_tex(CONTENT[1:10,], rownames = varnames2[1:10]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Participation}} \\\\ \\hline",
+  mat_to_tex(CONTENT[11:20,], rownames = varnames2[11:20]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Accountability}} \\\\ \\hline",
+  mat_to_tex(CONTENT[21:24,], rownames = varnames2[21:24]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Transparency}} \\\\ \\hline",
+  mat_to_tex(CONTENT[25:28,], rownames = varnames2[25:28]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Efficiency}} \\\\ \\hline",
+  mat_to_tex(CONTENT[29:32,], rownames = varnames2[29:32]),
+  "\\hline \\hline \\mc{6}{l}{\\parbox{4.8in} {\\scriptsize \\singlespace \\textit{Notes:} `Base' corresponds to the results reported in Table \\ref{table_main}. 
+  ``Alt. Treat.'' are results using a treatment variable that uses IRC's classification of treatment in cases in which databases disagreed. 
+  ``Village'' are results in which all variables are aggregated to the village level using individual sampling weights. 
+  ``Bin'' are results at the village level introducing controlling for lottery bins. 
+  ``Prop.'' are results (at the village level) using propensity weights adjusted to assess village level sample average treatment effects rather than population 
+  average treatment effects. $* p \\le 0.10, ** p \\le 0.05, *** p \\le  0.01$.}}", 
+  "\\label{table_robust}",
+  "\\end{tabular}"
+)
+
+sink("Output/Table_6_Robust.tex")
+tablr(T6)
+sink()
+
+############################
+# TABLE 7: Heterogeneous Analyses: Base; Projects; Committee; Inherited
+############################
+
+# schools
+robust_noschools <-  all_analyses(.subgroupcondition = "NOSCHOOLS==1")
+robust_noschools <- get.results.tab(robust_noschools)
+robust_noschools <- splice_sds(robust_noschools[,3:4])
+
+# inherited
+
+robust_inherited <-  all_analyses(.subgroupcondition = "INHERITED==1")
+robust_inherited <- get.results.tab(robust_inherited)
+robust_inherited <- splice_sds(robust_inherited[,3:4])
+
+# committees
+robust_nocommittee <-  all_analyses(.subgroupcondition = "NOCOMMITTEE==1")
+robust_nocommittee <- get.results.tab(robust_nocommittee)
+robust_nocommittee <- splice_sds(robust_nocommittee[,3:4])
+
+## Create table
+
+CONTENT <- cbind(mainanalysis, robust_noschools, robust_inherited, robust_nocommittee)
+
+T7 <- rbind(
+  "\\centering",
+  "\\scriptsize",
+  "\\begin{tabular}{lc|ccc}",
+  "	& Base      &   Projects &  Committees &  Inherited    \\\\ ",
+  "	& (se)      &   (se)      &  (se)      &  (se)    \\\\ \\hline \\hline",
+  #  "\\mc{5}{l}{\\textbf{Capture}} \\\\ \\hline",
+  mat_to_tex(CONTENT[1:10,], rownames = varnames2[1:10]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Participation}} \\\\ \\hline",
+  mat_to_tex(CONTENT[11:20,], rownames = varnames2[11:20]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Accountability}} \\\\ \\hline",
+  mat_to_tex(CONTENT[21:24,], rownames = varnames2[21:24]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Transparency}} \\\\ \\hline",
+  mat_to_tex(CONTENT[25:28,], rownames = varnames2[25:28]),
+  #  "\\hline \\mc{6}{l}{\\textbf{Efficiency}} \\\\ \\hline",
+  mat_to_tex(CONTENT[29:32,], rownames = varnames2[29:32]),
+  "\\hline \\hline \\mc{5}{l}{\\parbox{4.8in} {\\scriptsize \\singlespace \\textit{Notes:} 
+  This table replicates Table \\ref{table_main} for three subgroups. The column under `Base' are the results as presented in Table \\ref{table_main}. 
+  Results under `Projects' are the results for villages without school rooms in 2007, 
+  ``Committees'' for those without any village committee or association in 2007, and `Inherited' for those villages where the chief's father's position 
+  was inherited. $* p \\le 0.10, ** p \\le 0.05, *** p \\le  0.01$.}}", 
+  "\\label{table_main_gov}",
+  "\\end{tabular}"
+)
+
+sink("Output/Table_7_Hetero.tex")
+tablr(T7)
+sink()
+
+
+
+
+## END

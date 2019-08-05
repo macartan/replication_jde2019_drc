@@ -1,0 +1,1144 @@
+---
+title: "Cleaning Meta-Analysis data"
+author: "mk1"
+date: "3/17/2018"
+output: html_document
+---
+
+# Mexico
+
+```{r}
+## work on survey data
+# select required variables
+  mexsur <- mexsurdat[, grepl('^incumbent_vote_survey|^iturnout|^honesty|^P14_|reaction$|^female|^age|^education|^P51|^partisanship_i|^P5A|^voted_incumbent2012|^vote_buying|^P15A|^P15B_|^trust_secret|^trust_fair|^T|^P21|^state$|^MUN$|^LOC$|manzana|id_block|uniqueid|_i4i|newchange_i4$|section$|cluster2|posterior_incumbent43|prior_i4|^incumbent|^P9|^P18|^corruption|strength_i4$|16A$|good_news_i4', names(mexsurdat))]
+  
+# generate country identifier, and block fixed effects variable
+  mexsur %<>% 
+    mutate(ctry = "mex",
+           fe = paste(ctry, id_block, sep = "."),
+           cl = paste(fe, mexsur$cluster2, sep = "."),
+           ma_id = paste(cl, seq.int(nrow(mexsur))))  
+  
+# generate backlash variable from incumbent reaction and challenger reaction
+  mexsur %<>% mutate(backlash = 
+              case_when((incumbent_reaction > 0 | challenger_reaction > 0) ~ 1,
+                                                   TRUE ~ 0))
+  
+# m30 - manipulation check variable
+  mexsur %<>% mutate(P18_1 = 1*(P18_1=="Si"),
+                     P18_3 = 1*(P18_3=="Si"),
+                     correct_info_recall = 
+                        case_when(((P18_1==1 & corruption==1) | 
+                                   (P18_3==1 & corruption==0)) ~ 1,
+                                   TRUE ~ 0))
+  
+# get names and unique IDs of sampled municipalities
+  mexmun <- mexanaldat %>%  
+    dplyr::select(uniqueid, municipality) %>% 
+    distinct() %>% 
+    drop_na() %>% ### THIS MUST BE CHECKED!
+    arrange(municipality)
+
+# merge in the municipality names to the survey dataset  
+  mexsur <- merge(mexsur, mexmun, by = "uniqueid")
+
+# defining good and bad news based on flyers data ("Q") only (i.e. ignoring P) using the median rule 
+  flyer %<>% 
+    dplyr::select(uniqueid, ownparty, otherparty) %>% 
+    mutate_all(as.numeric) %>% 
+    drop_na(uniqueid) %>% 
+    mutate(diff = otherparty - ownparty,
+           m10 = case_when(diff > median(diff) ~ 1, TRUE ~ 0),
+           nij = m10) # note that nij and m10 are the same in the mex case
+    
+# merge the flyer data into the survey data [perfect merge, checked]  
+  mexsur <- merge(mexsur, flyer, by = "uniqueid")
+  
+# rename the other variables per the mpap  
+  mexsur <- reshape::rename(mexsur, c(incumbent_vote_survey="m1",
+                                      iturnout="m3",
+                                      honesty="m6",
+                                      P14_1="m7a",
+                                      P14_2="m7b",
+                                      P14_3="m7c",
+                                      P14_4="m7d",
+                                      P14_5="m7e",
+                                      P14_6="m7f",
+                                      P14_7="m7g",
+                                      backlash="m8",
+                                      prior_i4i="m9",
+                                      m10="m10", # fixed
+                                      strength_i4="m11",
+                                      female="m13",
+                                      age="m14",
+                                      education="m17",
+                                      P51="m18",
+                                      partisanship_i="m19",
+                                      P5A="m20",
+                                      voted_incumbent2012="m21",
+                                      vote_buying="m22",
+                                      P15A="m23a",
+                                      P15B_1="m23b",
+                                      P15B_2="m23c",
+                                      P15B_3="m23d",
+                                      P15B_4="m23e",
+                                      P21_1 ="m24a",
+                                      P21_2 ="m24b",
+                                      P21_3 ="m24c",
+                                      P21_4="m24d",
+                                      P21_5="m24e",
+                                      P21_6="m24f",
+                                      P21_7="m24g",
+                                      P21_8A="m24h",
+                                      trust_secret="m26",
+                                      trust_fair="m27",
+                                      correct_info_recall="m30",
+                                      T="treat_any",
+                                      Ti="treat_loc",
+                                      Tc="treat_comp",
+                                      Tn="treat_nonsoc",
+                                      Ts="treat_soc",
+                                      Tin="treat_loc_nonsoc",
+                                      Tcn="treat_comp_nonsoc",
+                                      Tis="treat_loc_soc",
+                                      Tcs="treat_comp_soc",
+                                      MUN="mun",
+                                      LOC="loc"))
+  
+# drop some unnecessary variables
+  mexsur %<>% 
+    dplyr::select(-c(TR, P21_8, P21_8Acod, vote_buying_m, vote_buying_m, incumbent_vote_share, incumbent_vote_share_lag))
+  
+## work on precinct data to extract m25 (competitiveness) measure
+  comp <- mexprecdat %>% mutate(m25 = 1-winner_margin) %>% 
+    dplyr::select(c(m25, uniqueid)) %>% 
+    distinct() %>% 
+    drop_na()
+  
+# merge into the main survey dataset [perfect merge, checked]  
+  mexsur <- merge(mexsur, comp, by = "uniqueid", all.x = T)
+
+## returning to the main survey data
+  
+  # generate treatment indicators
+  # [this can be moved above, to contain work]
+  
+  mexsur %<>% 
+    mutate(treat = case_when(treat_comp_nonsoc==1 ~ 1,
+                             treat_any==0 ~ 0)) %>%
+    # common arm - non-social benchmarking/comparative treatment
+    mutate(treat1 = treat_comp_nonsoc) %>%
+    # social benchmarking/comparative treatment
+    mutate(treat2 = treat_comp_soc)
+
+## clean covariates [additional notes in anirvan's file, but nothing major]
+# m5 - Effort - no data
+
+# m6 - honesty - no data
+  
+# m7 - criteria [make in 2 stages, first dichotomizing]
+mexsur %<>%   
+  mutate_at(vars(starts_with("m7")), .funs = funs(case_when(
+                  .==1 ~ 1,
+                  (grepl("N", .) | is.na(.)) ~ NA_real_,
+                  TRUE ~ 0))) %>% 
+  mutate(m7char = m7b,
+         m7cben = m7g,
+         m7eff = m7c, # Eric Arias disagrees [note in original code; unclear why!!]
+         m7pol = ifelse(m7d==1 | m7e==1 | m7f==1, 1,
+                 ifelse(is.na(m7d)==T & is.na(m7e)==T & is.na(m7f)==T, NA, 0)))
+
+# m8 - backlash, at the precinct level
+  mexsur %<>%
+    group_by(treat, uniqueid) %>%
+    mutate(m8 = mean(m8, na.rm = T))
+  
+# m9 - priors
+  
+# m10 - good news
+  
+# m11 - certain
+
+# m12 - cluster priors - Not in data  
+
+# m23 - salient: multiple variables, letting be for the moment
+
+# m24 - credibility of info source: multiple variables, letting be for the moment
+
+# m14 - age - 52 NAs
+
+# m15 - coethnic - no data
+
+# m16 - cogender - no data
+
+# m17 - educ - 7 NAs
+
+# m18 - wealth - 77 NAs ## concern, i see 63 NAs
+  mexsur %<>% mutate(m18 = case_when(
+                            m18=="Mucho peor" ~ 1,
+                            m18=="Peor" ~ 2,
+                            m18=="Igual" ~ 3,
+                            m18=="Mejor" ~ 4,
+                            m18=="Mucho mejor" ~ 5))
+  
+# m19 - partisan - 7 NAs
+  
+# m20 - voted in last elec 51 NAs
+  mexsur %<>% mutate(m20 = case_when(
+                            m20=="Si" ~ 1,
+                            m20=="No" ~ 0))  
+  
+# m21 - supported in last elec 1111 NAs
+  
+# m22 - clientelism 113 NAs CHECK
+  
+# m23 - salient - incompatible with mpap (variables m23a-m23e)
+
+# m24 - source - incompatible with PAP (variables m24a-m24h); can only use the first - ngo
+  mexsur %<>% mutate(m24 = case_when(
+                            m24a=="Si" ~ 1,
+                            m24a=="No" ~ 0))  
+  
+# m25 - competitiveness of election
+  
+# m26 - secret ballot
+  
+# m27 - free and fair
+  
+# m30
+  
+#public private sample
+  mexsur_pp <- mexsur %>% filter(treat1 == 1 | treat2 == 1 | treat_any == 0)
+  table(mexsur_pp$treat1, mexsur_pp$treat2, useNA = "a")
+  
+#common arm sample
+  mexsur <- mexsur %>% drop_na(treat)
+
+```
+
+# Benin
+
+```{r}
+
+### here is fix for accents TO DO
+  # 
+  # ben$m11 <- gsub("è", "?", ben$m11)
+  # table(ben$m11)
+
+## work on main survey dataset
+# rename key variables
+  ben <- ben %>% mutate(treat = 1*(commonarm==1 & public==0),
+                        treat1 = commonarm,
+                        treat2 = public,
+                        nij = N)
+
+# generate country identifier, and block fixed effects variable
+  ben %<>% 
+    mutate(ctry = "ben",
+           fe = paste(ctry, as.factor(blockid), sep = "."),
+           cl = paste(fe, as.factor(quartier), sep = "."),
+           ma_id = paste(cl, seq.int(nrow(ben)), sep = "."))
+
+## recode covariates
+# m5 - effort
+  ben %<>% mutate(m5 = dplyr::recode(m5, 
+                        "Beaucoup plus" = 4,
+                        "Un peu plus" = 3,
+                        "Un peu moins" = 2,
+                        "Beaucoup moins" = 1))
+  
+# m6 - honesty
+  ben %<>% mutate(m6 = dplyr::recode(m6, 
+                        "Tr?s surpris" = 1,
+                        "Assez surpris" = 2,
+                        "Pas tr?s surpris" = 3,
+                        "Pas du tout surpris" = 4))
+  
+# m7 - criteria [2 steps]
+  ben %<>%
+    mutate(m7 = case_when(
+              grepl("ethni", m7) ~ 1,
+              grepl("famille", m7) ~ 2,
+              grepl("quart", m7) ~ 3,
+              grepl("perform", m7) ~ 4,
+              grepl("capacit", m7) ~ 5,
+              grepl("honn", m7) ~ 6,
+              grepl("chef", m7) ~ 7),
+           m7id = case_when(
+              m7==1 ~ 1,
+              m7 > 1 ~ 0),
+           m7pben = case_when(
+              m7==2 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7cben = case_when(
+              m7==3 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7pol = case_when(
+              m7==4 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7eff = case_when(
+              m7==5 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7char = case_when(
+              m7==6 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7end = case_when(
+              m7==7 ~ 1,
+              is.na(m7)==F ~ 0)) %>% 
+    dplyr::select(-m7)
+
+# m8 - backlash
+
+# m9 - priors # remember to check info scale
+  ben %<>% mutate(m9 = dplyr::recode(m9, 
+                        "Much worse" = 4,
+                        "A little worse" = 3,
+                        "A little better" = 2,
+                        "Much better" = 1))
+  
+# m10 - good news
+  
+# m11 - certainty [concern: ACCENTS CAUSING PROBLEMS!!!]
+  ben %<>% mutate(m11 = dplyr::recode(m11, 
+                        "Tr?s confiant" = 1,
+                        "Confiant" = 2,
+                        "Pas tr?s confiant" = 3,
+                        "Pas du tout confiant" = 4))
+  
+# m12 - cluster priors
+  
+# m13 - gender
+  ben$m13 <- (ben$m13=="femme")*1
+  
+# m14 - age
+  
+# m15 - coethnic
+  
+# m16 - cogender # 3 NAs
+  
+# m17 - educ  # 24 NAs
+  
+# m18 - wealth
+  ben %<>% 
+    mutate(m18 = case_when(
+      m18=="Bien pires" ~ 1,
+      m18=="Pires" ~ 2,
+      grepl("Les", m18) ~ 3,
+      m18=="Meilleures" ~ 4,
+      m18=="Bien meilleures" ~ 5))
+  
+# m19 - partisan # 74 NAs [!!! i see 914 NAs here; concern]
+  ben$m19 <- with(ben, ifelse(grepl("Ne", m19), NA, m19))
+
+# m20 - voted in last elec # 8 NAs
+  ben$m20 <- (!ben$m20=="Non")*1
+  
+# m21 - supported in last elec  # 472 NAs
+  
+# m22 - clientelism [concern: ACCENTS CAUSING PROBLEMS!]
+  ben %<>% mutate(m22 = dplyr::recode(m22, 
+                        "Pas du tout probable" = 1,
+                        "Pas vraiment probable" = 2,
+                        "Assez probable" = 3,
+                        "Tr?s probable" = 4)) 
+  
+# m23 - salient, based on whether legislative performance was salient
+  ben$m23 <- with(ben, ifelse(grepl("Parle", m23), 1, ifelse(is.na(m23), NA, 0)))
+  
+# m24 - source
+  ben %<>%  
+    mutate(m24 = case_when(
+                      grepl("ONG", m24) ~ 1,
+                      grepl("local", m24) ~ 0,
+                      grepl("recher", m24) ~ 0,
+                      grepl("commun", m24) ~ 0,
+                      grepl("candida", m24) ~ 0))
+
+# m25 - competitiveness of election  # 20 NAs
+  
+# m26 - Secret ballot [concern: accents]
+  ben %<>% mutate(m26 = dplyr::recode(m26, 
+                        "Pas du tout probable" = 1,
+                        "Pas vraiment probable" = 2,
+                        "Assez probable" = 3,
+                        "Tr?s probable" = 4))
+  
+# m27 - free and fair [concern: ACCENT ISSUES; REMOVE THEM IN IMPORT]
+### concern: think there was mistake here before b/c of missing grave accent
+  ben %<>% mutate(m27 = dplyr::recode(m27, 
+                        "Pas du tout probable" = 1,
+                        "Pas vraiment probable" = 2,
+                        "Assez probable" = 3,
+                        "Tout à fait probable" = 4))
+  
+# m30
+  ben %<>% mutate(m30 = dplyr::recode(m30, 
+                        "Beaucoup plus" = 1,
+                        "Un peu plus" = 2,
+                        "Un peu moins" = 3,
+                        "Beaucoup moins" = 4))
+  
+  
+  #public private treatment sample
+  ben_pp <- filter(ben, !condition %in% c("Control in Private", "T2T4"))
+  table(ben_pp$treat1, ben_pp$treat2, useNA = "a")
+  
+  #common arm sample
+  # dropping public treatment arm and control subjects not in the private condition
+  ben <- filter(ben, public == 0 & condition != "Control in Private")
+```
+
+# Uganda 1
+
+```{r}
+# extract needed variables
+  ug1dat <- ug1dat[,intersect(names(ug1dat),names(ug1dat_ind))]
+
+  ug1 <- ug1dat[,grepl("^polknow_e$|^vote_ver2$|^turnout_ver2$|^effort$|^corrupt$|^identity_e$|^fambenefits_e$|^benefits_e$|^contributions_e$|^hardworking_e$|^character_e$|^endorse_e$|^candstatement_e$|^mppriorug2$|^mppriorug$|^district$|^votebuying$|^candexpress_norm$|^candinterests_norm$|^ratequalified_norm$|^goodnews$|^informed$|^gender$|^age$|^coethnic$|^cogender$|^educ$|^wealthindex$|^closeindep$|^closeupc$|^closenrm$|^closefdc$|^closeufa$|^closecp$|^closejeema$|^closedp$|^turnout2011$|^pastsupport$|^pastsupportprim2015$|^offer$|^activity$|^source_bin$|^competitive$|^powerful$|^counting$|^freepress$|^democ$|^sector_e|^code|^psname$|^treat|^news_dist|^incparty$|^info|^id$|^incumbent|^competitive_cand|^polknow_e|^salience$|relweight$|mppriorug|mpsectoralign|mpdistrictalig|mpmoneyalign|candexpress|candunderstand|ratequalified|^individual$|_dist$|candidateid", names(ug1dat))]
+
+# rename variables following the mpap  
+ug1 <- reshape::rename(ug1, c(vote_ver2="m1",
+                              turnout_ver2="m3",
+                              effort="m5",
+                              corrupt="m6",
+                              identity_e="m7a",
+                              fambenefits_e="m7b",
+                              benefits_e="m7c",
+                              contributions_e="m7d",
+                              hardworking_e="m7e",
+                              character_e="m7f",
+                              endorse_e="m7g",
+                              candstatement_e="m8",
+                              goodnews="m10",
+                              informed="m11",
+                              gender="m13",
+                              age="m14",
+                              coethnic="m15",
+                              cogender="m16",
+                              educ="m17",
+                              wealthindex="m18",
+                              closeindep="m19a",
+                              closeupc="m19b",
+                              closenrm="m19c",
+                              closefdc="m19d",
+                              closedp="m19e",
+                              closeufa="m19f",
+                              closecp="m19g",
+                              closejeema="m19h",
+                              turnout2011="m20",
+                              pastsupport="m21a",
+                              pastsupportprim2015="m21b",
+                              offer="m22",
+                              salience="m23",
+                              source_bin="m24",
+                              competitive="m25",
+                              powerful="m26",
+                              counting="m27",
+                              freepress="m28",
+                              democ="m29",
+                              polknow_e="m30",
+                              # treatment_i="treat",
+                              news_dist="nij"))
+
+# Defining the treatment arms
+# PR: The variable individual indicates whether a polling station was assigned to the individual or the public arm. The variable treat indicates whether an observation was assigned to be shown the video or not. In the case of the public screening, that's obviously the same for all observations within a polling station level.
+  ug1$treat1 <- ifelse(ug1$treat==1 & ug1$individual==1, 1, 0)
+  ug1$treat2 <- ifelse(ug1$treat==1 & ug1$individual==0, 1, 0)
+
+  ug1$treat <- (ug1$treatment_i=="Video")*1
+    
+# generate country identifier, and block fixed effects variable
+  ug1 %<>% 
+    mutate(ctry = "ug1",
+           fe = paste(ctry, as.factor(code), sep = "."),
+           cl = paste(fe, seq.int(nrow(ug1)), sep = "."))
+  ug1$ma_id <- ug1$cl 
+
+# set treatment indicator
+
+# subsetting to incumbents only
+  ug1 <- subset(ug1, incumbent==1)
+
+## recode individual covariates  
+# m5 - effort
+  ug1 %<>% mutate(m5 = dplyr::recode(m5, 
+                        "Much more" = 4,
+                        "A little more" = 3,
+                        "A little less" = 2,
+                        "Much less" = 1))  
+
+# m6 - honesty, no observations
+  
+# m7 - criteria - incompatible
+ug1 %<>%   
+  mutate_at(vars(starts_with("m7")), .funs = funs(case_when(
+                  grepl("Very", .) ~ 1,
+                  (is.na(.)==T | grepl("Don", .)) ~ NA_real_,
+                  TRUE ~ 0))) %>% 
+  dplyr::select(-c(m7a, m7b, m7c, m7d, m7e, m7f, m7g))  
+  
+# m8 - backlash
+  ug1$m8 <- (ug1$m8=="Yes")*1
+
+# m9 - priors
+
+# m10 - good news
+
+# m11 - certain
+
+# m12 - cluster priors - construct on own?  
+  
+# m13 - gender
+  ug1$m13 <- (ug1$m13=="Female")*1
+
+# m14 - age
+
+# m15 - coethnic
+
+# m16 - cogender
+
+# m17 - educ (imputing values for number of years of education)
+  ug1 %<>% mutate(m17 = case_when(
+      m17==1 ~ 0,
+      m17==2 ~ 3.5,
+      (m17==3|(m17>3 & m17<3.1)) ~ 7,
+      m17==4 ~ 9,
+      m17==5 ~ 11,
+      m17==6 ~ 12,
+      m17==7 ~ 13,
+      m17==8 ~ 15,
+      m17==9 ~ 16,
+      m17==10 ~ 17,
+      m17==11 ~ 16,
+      m17==12 ~ 19))
+
+# m18 - wealth
+  
+# m19 - copartisan
+# convert variables to correct class (7 variables here - one for each party)
+  ug1 %<>% 
+    mutate_at(vars(starts_with("m19")), funs(as.numeric(as.character(.)))) %>% 
+    mutate(incparty = as.character(incparty),
+           m19 = ifelse(incparty == "NRM", m19c,
+                 ifelse(incparty == "FDC", m19d,
+                 ifelse(incparty == "DP",  m19e, NA)))) %>% 
+    dplyr::select(-c(m19a, m19b, m19c, m19d, m19e, m19f, m19g, m19h))
+
+# m20 - voted in last election (has imputed values)
+
+# m21 - supported in last election (keeping only the actual election)
+  ug1$m21 <- ug1$m21a
+
+# m22 - clientelism
+  ug1 %<>% mutate(m22 = dplyr::recode(m22, 
+                        "Very unlikely" = 1,
+                        "Somewhat unlikely" = 2,
+                        "Neither likely nor unlikely" = 3,
+                        "Somewhat likely" = 4,
+                        "Very likely" = 5))  
+  
+# m23 - salient
+
+# m24 - source
+
+# m25 - competitiveness of election
+
+# m26 - secret ballot
+
+# m27 - free and fair
+
+# m30
+  
+#public private treatment sample
+  ug1_pp <- ug1
+  table(ug1_pp$treat1, ug1_pp$treat2, useNA = "a")
+
+#common arm sample
+  ug1 <- ug1 %>% filter(individual==1)
+
+```
+
+# Brazil
+
+```{r}
+# rename the variables following the pap
+  brz <- reshape::rename(brz, c(vote="m1",
+                                turnout="m3",
+                                decision_factors="m7",
+                                acc_rejected_prior="m9",
+                                acc_rejected="m10", #good news if m10 == 0
+                                tce_prior_cert = "m11",
+                                sex="m13",
+                                age="m14",
+                                same_race_mayor="m15",
+                                years_edu="m17",
+                                relative_wellbeing="m18",
+                                mayor_pid="m19",
+                                turnout_2012="m20",
+                                vote_2012="m21",
+                                prob_vote_buying="m22",
+                                info_corrupt_welfare1="m23",
+                                source_cred1_survey="m24",
+                                competitiveness="m25",
+                                prob_vote_monitoring="m26",
+                                prob_vote_count="m27",
+                                accounts="treat"))
+
+# adding inverse propensity weights [concern: ISSUE HERE IS THAT WE'RE USING THE REALIZED ASSIGNMENT RATIO TO MAKE THE PROPENSITY WEIGHTS; SHOULD BE THE TRUE PROB OF ASSIGNMENT]
+  brz %<>%
+    group_by(codesetor) %>%
+    mutate(treat_prop = mean(treat, na.rm = TRUE)) %>%
+    ungroup() %>% 
+    mutate(inv_wts = ifelse(treat == 1, 1/treat_prop, 1/(1-treat_prop)))
+
+# remove the attriters and the education treatment arm
+  brz %<>% 
+    filter(attrited != 1 & ana != 1)
+
+# generate country name and unique block and cluster variables
+  brz %<>%
+    mutate(ctry = "brz",
+           fe = paste(ctry, codesetor, sep = "."),
+           cl = paste(fe, seq.int(nrow(brz)), sep = "."),
+           ma_id = cl)
+
+# m30 - manipulation check; set this first before we flip the coding of m10  
+  brz$m30 <- (brz$acc_rejected_posterior==brz$m10)*1
+  
+# recode goodnews (m10) [in original dataset, coding is reversed]
+  brz$m10 <- (brz$m10 == 0)*1
+  
+# Create nij # based on m9
+  brz %<>%
+    mutate(nij = case_when(m10==1 ~ 1,
+                           m10 < m9 ~ -1,
+                           (m10==m9 & m9==0) ~ 0))
+  
+## recode individual covariates
+# m5 - effort
+
+# m6 - Honesty
+
+# m7 - Criteria (note we are setting "change", "party" and "administrator" to 0)
+  brz %<>%
+    mutate(m7 = case_when(
+                grepl("Ident", m7) ~ 1,
+                grepl("minha", m7) ~ 2,
+                grepl("a comuni", m7) ~ 3,
+                grepl("ticas", m7) ~ 4,
+                grepl("trabal", m7) ~ 5,
+                grepl("integ", m7) ~ 6,
+                grepl("familiar", m7) ~ 7,
+                grepl("mudan", m7) ~ 0,
+                grepl("partido", m7) ~ 0,
+                grepl("admin", m7) ~ 0),
+           m7id = case_when(
+              m7==1 ~ 1,
+              m7 > 1 ~ 0),
+           m7pben = case_when(
+              m7==2 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7cben = case_when(
+              m7==3 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7pol = case_when(
+              m7==4 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7eff = case_when(
+              m7==5 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7char = case_when(
+              m7==6 ~ 1,
+              is.na(m7)==F ~ 0),
+           m7end = case_when(
+              m7==7 ~ 1,
+              is.na(m7)==F ~ 0)) %>% 
+    dplyr::select(-m7)  
+  
+# m8 - backlash - this does not seem to be the right variable
+
+# m9 - Priors
+
+# m10 - Good news
+
+# m11 - certain
+  brz %<>%  
+    mutate(m11 = case_when(grepl("o seg", m11) ~ 1,
+                            grepl("Seg", m11) ~ 2,
+                            grepl("Inseg", m11) ~ 3,
+                            grepl("o inseg", m11) ~ 4))
+  
+# m12 - cluster priors - Not referenced in var match excel
+
+# m13 - gender
+  brz$m13 <- (brz$m13=="Mulher")*1
+  
+# m14 - age
+
+# m15 - coethnic
+
+# m16 - cogender - no variable for this
+
+# m17 - educ - seems like higghest class reached/completed
+
+# m18 - wealth
+  brz %<>% mutate(m18 = dplyr::recode(m18, 
+                        "Muito pior" = 1,
+                        "Pior" = 2,
+                        "Igual" = 3,
+                        "Melhor" = 4,
+                        "Muito melhor" = 5))
+  
+# m19 - partisan
+
+# M20 - voted in last elec
+
+# M21 - supported incumbernt in last elec
+
+# m22 - clientelism
+
+# m23 - salient
+
+# m24 - source
+
+# m25 - competitiveness of election - not in data, need to merge in
+
+# m26 - Secret ballot
+
+# m27 - Free and fair
+
+# m30
+```
+
+# Burkina Faso
+
+```{r}
+# rename the variables per the mpap
+  bf <- reshape::rename(bf, c(vote.incumbent="m1",
+                              vote_turnout_chance="m3",
+                              mayor_effort="m5",
+                              corruption_source="m6",
+                              prior.quantile = "m9",
+                              goodnews.quantile = "m10",
+                              ranking_estimate_certainty="m11",
+                              gender="m13",
+                              age="m14",
+                              edyears="m17",
+                              living_conditions="m18",
+                              vote_municipal_elections_2012="m20",
+                              vote_incumbent_party_mun_2012="m21",
+                              mun_campaign_gifts="m22a",
+                              trust_source1="m24a",
+                              trust_source2="m24b",
+                              trust_source3="m24c",
+                              likelihood_vote_knowledge="m26",
+                              likelihood_fair_vote_counting="m27",
+                              attentiveness_comp_q10="m30",
+                              treatment.info="treat",
+                              bias.quantile = "nij"))
+
+# recode m3 (turnout) [for some insane reason we need to fix some system indicator]
+  Sys.setlocale('LC_ALL','C')
+
+  bf %<>%
+    mutate(m3 = case_when(grepl("avoid|not vot|probably won", m3) ~ 0,
+                          grepl("towards vot|definit|will prob", m3) ~ 1))
+
+# recode treatment indicator
+  bf %<>%
+    mutate(treat = as.numeric(bf$treat)-1)
+
+# create country indicator, and set fixed effect and cluster variables
+  bf %<>%
+    mutate(ctry = "bf",
+           fe = paste(ctry, village, sep = "."),
+           cl = paste(fe, seq.int(nrow(bf)), sep = "."),
+           ma_id = cl)
+
+## recode individual covariates
+# m13 - gender
+  bf %<>%
+    mutate(m13 = (bf$m13=="Woman")*1)
+
+# m14 - age
+
+# m15 - coethnic - no data NA
+
+# m16 - cogender - no data NA
+
+# m17 - educ
+
+# m18 - wealth
+  bf %<>%
+    mutate(m18 = case_when(
+      m18=="Worse" ~ 1,
+      m18=="Somewhat worse" ~ 2,
+      m18=="Same" ~ 3,
+      m18=="Somewhat better" ~ 4,
+      m18=="Much better" ~ 5))
+
+# m19 - partisan - unavailable
+
+# m20 - voted in last election
+  bf %<>%
+    mutate(m20 = case_when(m20=="Yes" ~ 1,
+                            m20=="No" ~ 0))
+
+# m21 - supported in last election (note, lots of missingness)
+  bf %<>%
+    mutate(m21 = case_when(m21=="Yes" ~ 1,
+                            m21=="No" ~ 0))
+
+# m22 - clientelism (m22a seems to be the most pertinent: Do you think that you will be offered a campaign gift for the upcoming municipal elections in your commune?)
+  bf %<>%
+    mutate(m22 = case_when(m22a=="Yes" ~ 1,
+                           m22a=="No" ~ 0))
+
+# m23 - salient - incompatible: only asks if info fiven was useful or not.
+
+# m24 - source
+bf %<>%
+  mutate(m24a = case_when(
+            grepl("local", m24a) ~ "local politician",
+            grepl("NGO", m24a) ~ "NGO flyer",
+            grepl("survey", m24a) ~ "survey enumerator",
+            grepl("comm", m24a) ~ "community member",
+            grepl("debate", m24a) ~ "candidate debate"),
+         m24 = case_when(
+            grepl("survey", m24a) ~ 1, # because bf used surveyor
+            is.na(m24a)==T ~ NA_real_,
+            TRUE ~ 0))
+
+# m25 - competitiveness of election - not in data
+
+# m26 - secret ballot
+  bf %<>%
+    mutate(m26 = case_when(m26=="Very likely" ~ 4,
+                           m26=="Somewhat likely" ~ 3,
+                           m26=="Not very likely" ~ 2,
+                           m26=="Not at all likely" ~ 1))
+
+# m27 - free and fair
+  bf %<>%
+    mutate(m27 = case_when(m27=="Very likely" ~ 4,
+                           m27=="Somewhat likely" ~ 3,
+                           m27=="Not very likely" ~ 2,
+                           m27=="Not at all likely" ~ 1))
+  
+# m30
+  bf %<>%
+    mutate(m30 = case_when(m30=="Correct" ~ 1,
+                           m30=="Incorrect" ~ 0))
+
+# m5 - effort
+bf %<>%
+  mutate(m5 = case_when(
+    m5=="Much more" ~ 4,
+    m5=="Little more" ~ 3,
+    m5=="Little less" ~ 2,
+    m5=="Much less" ~ 1))
+
+# M6 - Honesty
+  bf %<>%
+    mutate(m6 = case_when(
+      m6=="Very surprised" ~ 1,
+      m6=="Somewhat surprised" ~ 2,
+      m6=="Not too surprised" ~ 3,
+      m6=="Not at all surprised" ~ 4))
+
+# m7 - criteria - variable not in data
+
+# m8 - backlash - NA
+
+# m9 - priors
+
+# m10 - good news - calculate as per pap
+
+# m11 - certain
+  bf %<>%
+    mutate(m11 = case_when(
+      m11=="Completely certain" ~ 1,
+      m11=="Pretty certain" ~ 2,
+      m11=="Uncertain but confident" ~ 3,
+      m11=="Pretty uncertain" ~ 4))
+
+# M12 - cluster priors - no data, construct on my own? [I guess the answer is no we can't!]
+```
+
+# Uganda 2
+
+```{r}
+## work on main survey dataset (basically raw)
+# changing BD treatment into character [concern: why?! is this necessary later on?]
+  ug2dat$bd.multi.treat2 <- as.character(ug2dat$bd.multi.treat2)
+  ug2dat$bd.multi.treat2[ug2dat$bd.multi.treat2=="1"] <- "1.0"
+  ug2dat$bd.multi.treat2[ug2dat$bd.multi.treat2=="0"] <- "0.0"
+
+# subsetting to meta-analysis variables only
+  ug2 <- ug2dat[,grepl("id.cleaned|^district_lower|^subcounty.x|^village|^lc5.chair.inc.vote|^lc5.councillor.inc.vote|^d.color_of_water_basin.x|^d.vote_in_LC5_election.x|^d.effort_of_LC5_councilor|^d.curruption_LC5_chairperson|^d.most_important_deciding_LC5Chr.ethnicity.x$|^d.most_important_deciding_LC5Chr.provides_benef.x|^d.most_important_deciding_LC5Chr.makes_good_pol.x|^d.most_important_deciding_LC5Chr.provides_quali.x|^d.most_important_deciding_LC5Chr.has_integrity.x|^d.most_important_deciding_LC5Chr.is_endorsed_by.x|^d.most_important_deciding_LC5Chr.don_t_know.x|^d.most_important_deciding_LC5Chr.refused_to_ans.x|^b.Q22_LC5_record_of_budget_mgmt|^b.Q23_Certainty_about_LC5_budget|^r.What_is_your_gender|^r.What_is_your_age|^b.Q2_tribe_same_as_LC5|^r.How_much_schooling_have_you_co|^b.Q1_living_conditions|^b.Q9_party_aliignment|^b.Q9a_other_party_alignment|^b.Q10_attachment_to_party|^b.Q11_2011_Vote_for_LC5councilor|^b.Q12_2011_vote_for_LC5chair|^b.Q15_Vote_buying_from_LC3_LC5|^b.Q16_Importance_of_budget_LC3_L|^b.Q21a_Trust_in_politicians_for_|^b.Q21b_Trust_in_Twaweza_for_info|^b.Q21c_Trust_in_NGOs_for_info|^b.Q21d_Trust_in_Auditor_General_|^lc5.chair.competitive|^lc5.councillor.competitive|^b.Q24_Powerful_ppl_learning_how_|^b.Q25_Will_counting_votes_be_fai|^d.X_7_Compared_to_other_districts|treat|budget.prior.diff|aligned.lc5|d.block|district_lower|location.id|budget.actual|budget.prior|compe|switch|budget.treat|intent|turnout|2016$", names(ug2dat))]
+
+# renaming variables according to the mpap
+  ug2 <- reshape::rename(ug2, c(lc5.chair.inc.vote= "m1a",
+                           lc5.councillor.inc.vote= "m1b",
+                           d.color_of_water_basin.x= "m2",
+                           lc5.turnout = "m3",
+                           d.effort_of_LC5_councilor= "m5",
+                           d.curruption_LC5_chairperson= "m6",
+                           d.most_important_deciding_LC5Chr.ethnicity.x= "m7a",
+                           d.most_important_deciding_LC5Chr.provides_benef.x= "m7b",
+                           d.most_important_deciding_LC5Chr.makes_good_pol.x= "m7c",
+                           d.most_important_deciding_LC5Chr.provides_quali.x= "m7d",
+                           d.most_important_deciding_LC5Chr.has_integrity.x= "m7e",
+                           d.most_important_deciding_LC5Chr.is_endorsed_by.x= "m7f",
+                           d.most_important_deciding_LC5Chr.don_t_know.x= "m7g",
+                           d.most_important_deciding_LC5Chr.refused_to_ans.x= "m7h",
+                           b.Q22_LC5_record_of_budget_mgmt= "m9",
+                           b.Q23_Certainty_about_LC5_budget= "m11",
+                           r.What_is_your_gender= "m13",
+                           r.What_is_your_age= "m14",
+                           b.Q2_tribe_same_as_LC5= "m15",
+                           r.How_much_schooling_have_you_co= "m17",
+                           b.Q1_living_conditions= "m18",
+                           aligned.lc5.chair.inc= "m19a",
+                           aligned.lc5.councillor.inc= "m19b",
+                           b.Q11_2011_Vote_for_LC5councilor= "m21b",
+                           b.Q12_2011_vote_for_LC5chair= "m21a",
+                           b.Q15_Vote_buying_from_LC3_LC5= "m22",
+                           b.Q16_Importance_of_budget_LC3_L= "m23",
+                           b.Q21a_Trust_in_politicians_for_= "m24a",
+                           b.Q21b_Trust_in_Twaweza_for_info= "m24b",
+                           b.Q21c_Trust_in_NGOs_for_info= "m24c",
+                           b.Q21d_Trust_in_Auditor_General_= "m24d",
+                           lc5.chair.competitive= "m25a",
+                           lc5.councillor.competitive= "m25b",
+                           b.Q24_Powerful_ppl_learning_how_= "m26",
+                           b.Q25_Will_counting_votes_be_fai= "m27",
+                           d.X_7_Compared_to_other_districts="m30",
+                           budget.prior.diff="nij",
+                           budget.treat="treat"))
+
+
+# we create inverse propensity weights for ug2 based on location sample size; i.e., villages with fewer than 15 subjects had assignment probability of .5, and otherwise paired with assignment prob .2 and .8.
+  ug2 <- ug2 %>% group_by(location.id) %>% mutate(n = n(), prop.treat = mean(treat, na.rm=TRUE)) %>% ungroup()
+  ug2$inv_wts2 <- ifelse(ug2$n<15, 1/.5,ifelse(ug2$prop.treat > 2/3, # we infer the propensity of treatment based on share of treated within a village, which due to sample size are between .75 and .84 for .8 treatment density and between .157 and .238 for .2 density. 
+                                           ug2$treat*1/.8 + (1-ug2$treat)*1/.2,
+                                           ug2$treat*1/.2 + (1-ug2$treat)*1/.8))
+
+# REVIEW
+# Create paired cluster id for villages larger than 15 subjects. Pairing is done based on sorted data by number of subjects following description in Chapter 7. The 'location.pair.id' is used for calculating RITE. "In villages with less than 15 subjects, half were assigned to the treatment and half to the placebo. For villages with at least 15 subjects, we created paired blocks based on an ordered sorting of the number of participating subjects. Within each pair, we assigned one village to have 80 percent of subjects treated and the other village to have 20 percent of subjects treated."
+
+# Variable d.block is non-missing for villages with at least 15 subjects and is uniquely assigned to pairs of location.id. 9 locations with non-missing d.blocks are not in a pair and subjects are assigned either .2 or .8
+# test <- ug2 %>% group_by(location.id, d.block) %>% summarize(n = n(), prop_treated = sum(treat==1)/n()) %>% arrange(desc(n.subj))
+# old code 
+# ug2$block <- with(ug2, paste(district_lower, d.block, location.id, sep = "_")) # this is the "block2" variable from previous code
+
+  ug2$ctry <- "ug2"
+  
+  # Adding fe and cluster vars
+  ug2$fe <- paste(ug2$ctry, as.character(ug2$location.id), sep = ".") # village
+  ug2$cl <- paste(ug2$fe, seq.int(nrow(ug2)), sep = ".") # individual
+  
+  #coding assignment paired block
+  paired <- unique(ug2$fe[!is.na(ug2$d.block)])
+  notpaired <- unique(ug2$fe[is.na(ug2$d.block)])
+  
+  ts <- paired[paired %in% notpaired] 
+  table(as.character(ug2$d.block[ug2$fe %in% ts[2]]), useNA = "a")
+  # 2 obs of 2 villages missing d.block but have a d.block value for all other obs
+  #REVIEW: correct manually
+  ug2$paired_block <- as.character(ug2$d.block)
+  ug2$paired_block <- ifelse(!is.na(ug2$d.block), ug2$paired_block, ug2$fe) # village
+  ug2$paired_block[ug2$fe == ts[1]] <- "4.l"
+  ug2$paired_block[ug2$fe == ts[2]] <- "18.g"
+  
+## recode individual covariates  
+
+# m5 - Effort
+ ug2 %<>%
+    mutate(m5 = case_when(
+                    m5=="much_more_effo" ~ 4,
+                    m5=="a_little_more_" ~ 3,
+                    m5=="a_little_less_" ~ 2,
+                    m5=="much_less_effo" ~ 1))
+
+# m6 - honesty
+  ug2 %<>%
+    mutate(m6 = case_when(
+                    m6=="very_surprised" ~ 1,
+                    m6=="somewhat_surpr" ~ 2,
+                    m6=="not_too_surpri" ~ 3,
+                    m6=="not_surprised_" ~ 4))
+
+# m7 - criteria
+  ug2 %<>%
+    mutate_at(vars(starts_with("m7")), funs(as.numeric(.))) %>% 
+    dplyr::rename(m7id = m7a,
+                  m7pben = m7b,
+                  m7cben = m7c,
+                  m7pol = m7d,
+                  m7eff = m7e,
+                  m7char = m7f,
+                  m7end = m7g)
+  
+# m8 - backlash - no variable
+
+# m9 - priors
+  ug2 %<>%
+    mutate(m9 = case_when(
+                    m9=="much_better" ~ 1,
+                    m9=="better" ~ 2,
+                    m9=="a_little_worse" ~ 3,
+                    m9=="much_worse" ~ 4))
+
+# m10 - defining good and bad news
+  ug2 %<>%
+    mutate(m10 = case_when(
+      budget.actual > budget.prior | (budget.actual==budget.prior & budget.actual >= 4) ~ 1,
+      budget.actual < budget.prior | (budget.actual==budget.prior & budget.actual <= 2) ~ 0))
+
+# m11 - certain
+  ug2 %<>%
+    mutate(m11 = case_when(
+                    m11=="very_certain" ~ 1,
+                    m11=="certain" ~ 2,
+                    m11=="not_certain" ~ 3,
+                    m11=="very_uncertain" ~ 4))
+
+# m12 - cluster priors (no variable)  
+  
+# m13 - gender
+  ug2$m13 <- (ug2$m13=="female")*1
+  
+# m14 - age
+
+# m15 - coethnic
+  ug2$m15 <- with(ug2, ifelse(m15=="yes", 1, ifelse(m15=="no", 0, NA)))
+
+# m16 - cogender
+
+# m17 - educ (imputing values for number of years of education, as for ug1)
+  ug2 %<>% 
+    mutate(m17 = case_when(
+        m17=="no_schooling" ~ 0,
+        m17=="some_primary_s" ~ 3.5,
+        m17=="completed_prim" ~ 7,
+        m17=="some_secondary" ~ 9,
+        m17=="completed_seco" ~ 11,
+        m17=="some_universit" ~ 15,
+        m17=="completed_univ" ~ 17,
+        m17=="some_post_grad" ~ 18,
+        m17=="completed_mast" ~ 19))  
+ 
+# m18 - wealth
+ ug2 %<>% 
+    mutate(m18 = case_when(
+        m18=="much_worse" ~ 1,
+        m18=="worse" ~ 2,
+        m18=="the_same" ~ 3,
+        m18=="better" ~ 4,
+        m18=="much_better" ~ 5))
+
+# m19 - partisan (m19a is chairs, m19b is councillors; we define m19 for chair only)
+  ug2$m19a <- as.numeric(ug2$m19a)
+  ug2$m19b <- as.numeric(ug2$m19b)
+
+# m20 - voted in last elec (missing. However, there is a "I did not vote" option in m21. Is that enough? Are we sure that the others actually voted? Generating it for the time being.)
+### concern: was this ever resolved???  
+  ug2$m20a <- with(ug2, ifelse(m21a=="i_did_not_vote", 0, 
+                        ifelse(m21a=="", NA, 1))) #chair
+  ug2$m20b <- with(ug2, ifelse(m21b=="i_did_not_vote", 0, 
+                        ifelse(m21b=="", NA, 1))) #councillor
+
+### concern: see anirvan's note here on m21. was this ever finally resolved?  
+# m21 - supported in last election (AC's note: "I am taking did not vote as NA here, may want to do this differently; I did not vote => I did not support the incumbent. Ask Thad")
+  ug2$m21a <- with(ug2, ifelse(m21a=="yes", 1, ifelse(m21a=="no", 0, NA)))
+  ug2$m21b <- with(ug2, ifelse(m21b=="yes", 1, ifelse(m21b=="no", 0, NA)))
+
+# m22 - clientelism
+ ug2 %<>% 
+    mutate(m22 = case_when(
+        m22=="very_unlikely" ~ 1,
+        m22=="somewhat_unlik" ~ 2,
+        m22=="don_t_know" ~ 3,
+        m22=="somewhat_likel" ~ 4,
+        m22=="option_6" ~ 5))  
+
+# m23 - salient - (AC note: I don't think this is usable as it asks the importance of budgetary information. the metaPAP asks respondents to rank the salience of receiving info on 4 activities of a rep. but we can change this to a binary")
+  ug2 %<>% 
+      mutate(m23 = case_when(
+          (m23=="very_important"| m23=="somewhat_impor") ~ 1,
+          (m23=="don_t_know"| grepl("no", m23)) ~ 0)) 
+
+# m24 - credibility of info source (m24a = politician, m24b = twaweza, m24c = ngo, m24d = auditor general) using the AG since that was the source 
+### concern: but here, the variable is coded based on m24c which is the NGO, right?? shouldn't this be m24d???
+  ug2 %<>%
+    mutate(m24 = case_when(
+                      grepl("^trust", m24c) ~ 1,
+                      grepl("^do_", m24c) ~ 0,
+                      TRUE ~ NA_real_))
+
+# m25 - competitiveness of election # this is a dummy variable
+
+# m26 - secret ballot
+  ug2 %<>%
+    mutate(m26 = case_when(
+                    m26=="not_at_all_lik" ~ 1,
+                    m26=="not_very_likel" ~ 2,
+                    m26=="don_t_know" ~ 3,
+                    m26=="somewhat_likel" ~ 4,
+                    m26=="very_likely" ~ 5))
+  
+# m27 - free and fair
+  ug2 %<>%
+    mutate(m27 = case_when(
+                    m27=="not_at_all_lik" ~ 1,
+                    m27=="not_very_likel" ~ 2,
+                    m27=="don_t_know" ~ 3,
+                    m27=="somewhat_likel" ~ 4,
+                    m27=="very_likely" ~ 5))
+
+# m30 - manipulation
+  ug2 %<>%
+    mutate(m30 = case_when(
+                    m30=="much_better" ~ 5,
+                    m30=="better" ~ 4,
+                    m30=="don_t_know" ~ 3,
+                    m30=="a_little_worse" ~ 2,
+                    m30=="much_worse" ~ 1))
+  
+## reshape dataset such that LCV chair and councilor information stacked as separate rows
+  
+  ug2_chair <- ug2 %>%
+    mutate(ug2_councilor_dummy = 0) %>%
+    mutate(m1 = m1a,
+           m19 = m19a,
+           m20 = m20a,
+           m21 = m21a,
+           ug2_contested = m25a)
+  
+  ug2_counc <- ug2 %>%
+    mutate(ug2_councilor_dummy = 1) %>%
+    mutate(m1 = m1b,
+           m19 = m19b,
+           m20 = m20b,
+           m21 = m21b,
+           ug2_contested = m25b)
+  
+  ug2 <- rbind(ug2_chair, ug2_counc)
+  
+  #assign individual ids for each observation in new data
+  ug2$ma_id <- paste(ug2$fe, 1+seq.int(nrow(ug2))/100000)
+
+```
+
+# Save as `Rda` objects
+
+```{r}
+save(mexsur, file = "data/temp/mex_covinter_clean.Rda")
+save(ug1, file = "data/temp/ug1_covinter_clean.Rda")
+save(ug2, file = "data/temp/ug2_covinter_clean.Rda")
+save(bf, file = "data/temp/bf_covinter_clean.Rda")
+save(brz, file = "data/temp/brz_covinter_clean.Rda")
+save(ben, file = "data/temp/ben_covinter_clean.Rda")
+```
+

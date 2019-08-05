@@ -1,0 +1,12 @@
+"0","analysis20 <- sapply(gpsvars, function(j) 
+  ri.analysis(gps[j][[1]], IND = gps$indirect20, indirects=ind20, weight = gps$gps_weight20, weight_matrix = w20, spilloversims = spilloversims)
+  )
+
+CONTENT20 <- round(t(analysis20),2)
+
+kable(CONTENT05, title = ""Spillovers at 5km"")
+"
+"1","pandoc.exe: C:\Dropbox\temp_replication\DRCweb\.Rproj.user\shared\notebooks\E9ACF8DA-20190717_Replication_NotLocal2\1\591242B5C49DF5E4\cmx51fyyb6v3z_t\_rs_html_3f247e0f1d99.html: openFile: does not exist (No such file or directory)
+"
+"2","Error: pandoc document conversion failed with error 1
+"

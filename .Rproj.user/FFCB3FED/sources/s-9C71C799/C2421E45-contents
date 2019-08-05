@@ -1,0 +1,76 @@
+# get data
+cdcdata$LOTT_BIN <- unclass(factor(cdcdata$LOTT_BIN))
+
+# extract adjacency matrix. Note that this is 1020 * 1020: there are 100 obs with no geo data
+adj <- gps[,5:ncol(gps)]
+dim(adj)
+
+# Add in treatment data
+gps <- merge(gps, cdcdata, by = "IDV")
+
+# adjacency matrix for same CDC
+same_cdc <- sapply(gps$CDCCODE, function(i) gps$CDCCODE==i)
+
+# Rerandomize -- same # treated CDC in lottbin (ie conditional on geographic data availability)
+cdc_level_data <- aggregate(x = gps[c("TUUNGANE", "CDCCODE", "LOTT_BIN")], by = list(gps$CDCCODE), FUN = "mean")
+resample       <- function() ave(cdc_level_data$TUUNGANE, cdc_level_data$LOTT_BIN, FUN = function(x)  sample(x))
+rerand         <- function(){
+  resampled <- cdc_level_data$CDCCODE[resample()==1]
+  as.vector(gps$CDCCODE %in% resampled)
+}
+
+# Save in indirect measures
+gps$indirect05  <- 1*indirect(d=5)
+gps$indirect20 <- 1*indirect(d=20)
+
+# Now get matrices of re-randomized exposure within some distance like this:
+dir    <- replicate(spilloversims, rerand())
+ind05  <- sapply(1:spilloversims, function(j) indirect(d = 5, treated = dir[,j]))
+ind20  <- sapply(1:spilloversims, function(j) indirect(d = 20, treated = dir[,j]))
+
+# Back out probabilities and weights
+
+gps$pDI_05  <-  apply(dir     * ind05,     1, mean)
+gps$pD0_05  <- apply(dir     * (1-ind05), 1, mean)
+gps$p0I_05  <-  apply((1-dir) * ind05,     1, mean)
+gps$p00_05  <- apply((1-dir) * (1-ind05), 1, mean)
+
+gps %<>%     dplyr::mutate(
+  wDI_05  = 1/pDI_05,
+  wD0_05  = 1/pD0_05,
+  w0I_05  = 1/p0I_05,
+  w00_05  = 1/p00_05
+)
+
+gps$pDI_20  <-  apply(dir     * ind20,     1, mean)
+gps$pD0_20  <- apply(dir     * (1-ind20), 1, mean)
+gps$p0I_20  <-  apply((1-dir) * ind20,     1, mean)
+gps$p00_20  <- apply((1-dir) * (1-ind20), 1, mean)
+
+gps %<>%     dplyr::mutate(
+  wDI_20  = 1/pDI_20,
+  wD0_20  = 1/pD0_20,
+  w0I_20  = 1/p0I_20,
+  w00_20  = 1/p00_20
+)
+
+# For full analysis there should only be cases that have a 0<p<1  probability of being in all conditions
+gps %<>%     dplyr::mutate( 
+  exclude05 = (pDI_05 ==1 | pDI_05 ==0) | (pD0_05 ==1 | pD0_05 ==0) | (p0I_05 ==1 | p0I_05 ==0) |(p00_05 ==1 | p00_05 ==0),
+  exclude20 = (pDI_20 ==1 | pDI_20 ==0) | (pD0_20 ==1 | pD0_20 ==0) | (p0I_20 ==1 | p0I_20 ==0) |(p00_20 ==1 | p00_20 ==0)
+)
+# table(gps$exclude05, gps$exclude20)
+
+# set weights to NA for excluded cases
+# set weights to NA for excluded cases
+gps$wDI_05[gps$exclude05] <- NA; gps$w0I_05[gps$exclude05] <- NA; gps$wD0_05[gps$exclude05] <- NA; gps$w00_05[gps$exclude05] <- NA
+gps$wDI_20[gps$exclude20] <- NA; gps$w0I_20[gps$exclude20] <- NA; gps$wD0_20[gps$exclude20] <- NA; gps$w00_20[gps$exclude20] <- NA
+
+gps$gps_weight05 <- gen_weight05(D=gps$TUUNGANE, I=gps$indirect05, data = gps)
+gps$gps_weight20 <- gen_weight20(D=gps$TUUNGANE, I=gps$indirect20, data = gps)
+
+# par(mfrow = c(2,2))
+# hist(gps$gps_weight05)
+# hist(gps$gps_weight20)
+# check
+# pDI_05+p0I_05+pD0_05+p00_05

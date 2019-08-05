@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1530692571304.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "CFC099E2",
+    "lastKnownWriteTime" : 1519332594,
+    "last_content_update" : 1519332594,
+    "path" : "C:/Users/bicalho/Dropbox/Metaketa_Book_All/8 Replication/ch11_replication_files_clean/2d_mde.Rmd",
+    "project_path" : null,
+    "properties" : {
+        "chunk_output_type" : "console",
+        "cursorPosition" : "46,20",
+        "docOutlineSize" : "109.99891434708753",
+        "docOutlineVisible" : "0",
+        "scrollLine" : "25"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

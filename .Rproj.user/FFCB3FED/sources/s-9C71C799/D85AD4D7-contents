@@ -1,0 +1,52 @@
+
+# rm(list = ls())
+# library(foreign)
+
+ DIS = unique(D$DISTRICT)
+ DISTRICT=D$DISTRICT
+ CHEF = D$CHEF
+ 
+ fig_timeline <- function(){
+   par(mfrow=c(2,2))
+   
+   T1a = 	as.Date(D$lottery_date_med, origin="1960-01-01")
+   T1b = 	as.Date(D$T1_end_cdv_med, origin="1960-01-01")
+   T1c = 	as.Date(D$T1_end_cdc_med, origin="1960-01-01") 
+   Ra = 	as.Date(D$stepA, origin="1960-01-01")
+   Rb = 	as.Date(D$stepD, origin="1960-01-01")
+   up = .2
+   #	lshift = 320
+   lshift = 800
+   
+   RANGE=c(min(T1a), max(Rb,T1c))
+   RANGE2 = as.Date(seq(RANGE[1], RANGE[2], 60))
+   
+   DISTRICT[DISTRICT=="SUD KIVU"] <- "SOUTH KIVU"
+   D$DISTRICT[D$DISTRICT=="SUD KIVU"] <- "SOUTH KIVU"
+   DIS[DIS=="SUD KIVU"] <- "SOUTH KIVU"
+   
+   for(j in 1:length(DIS)){
+     CH = unique(CHEF[DISTRICT == DIS[j]])
+     DI = DIS[j]	
+     o = rank(T1a[DISTRICT == DIS[j]])
+     plot(RANGE, RANGE, main=DI, ylim = c(0, length(CH)+1), xlim=c(min(RANGE)-lshift, max(RANGE)), axes=F,  xlab="", ylab = "", cex.main=2)
+     axis(1, at=RANGE2, labels=format(RANGE2, "%b %Y"), las=1, tick=F, cex.axis=1.5)
+     box()
+     for(i in (1:length(CH))){
+       j = o[i]
+       # Thin line:
+       segments(T1a[CHEF==CH[i]],j, T1c[CHEF==CH[i]],j, col="black")
+       # Thick line:
+       segments(T1a[CHEF==CH[i]],j, T1b[CHEF==CH[i]],j, col="black", lwd=6)
+       # Red line:
+       segments(Ra[CHEF==CH[i]] ,j+up, Rb[CHEF==CH[i]],j+up, col="red", lwd=3)
+       text(min(RANGE)-lshift,j, CH[i], pos=4, cex=1.3)
+     }	
+   }
+   
+ }
+ 
+ 
+pdf(file="Output/Fig_Timeline.pdf", width=13, height=15)
+fig_timeline()	
+dev.off()

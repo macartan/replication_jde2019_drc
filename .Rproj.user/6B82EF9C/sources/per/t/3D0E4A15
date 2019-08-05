@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1564925749054.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "1593986342",
+    "id" : "3D0E4A15",
+    "lastKnownWriteTime" : 1564421350,
+    "last_content_update" : 1564421350,
+    "path" : "C:/Dropbox/temp_replication/DRCweb/Code/2.2 PrepSpillovers.R",
+    "project_path" : "Code/2.2 PrepSpillovers.R",
+    "properties" : {
+        "cursorPosition" : "67,5",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

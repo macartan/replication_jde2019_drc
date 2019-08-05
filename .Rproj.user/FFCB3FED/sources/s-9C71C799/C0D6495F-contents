@@ -1,0 +1,696 @@
+
+## This dofile creates functions that are used later
+
+## The following functions are created:
+# Mode
+# agg_to_mean
+# balance_function
+# analyze
+# resave
+# cluster_robust, lm_cluster_robust
+# output_function
+# calculate_mean_effects_index
+# normalize, wmeaneffects
+# mat_plot
+#fixdec
+# get.results, get.results.tab
+# outline
+# mat_to_tex
+# outbalance
+# outrobust
+
+####### 
+# Function to grab a mode
+#######
+
+Mode <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+Mode(c("a","b","a"))
+
+#######
+# Function to aggregate to mean
+#######
+
+agg_to_mean <- function(data, by)  aggregate(data, by=by, FUN="mean", na.rm=TRUE)
+
+#######
+# Function to report mean in two groups and standardized difference
+#######
+
+balance_function <- function(Y,X,W = rep(1, length(X))){
+  
+  K <- (!is.na(Y[X==0]) & !is.na(W[X==0]))
+  c(
+    weighted.mean(Y[X==0], W[X==0], na.rm = TRUE),
+    weighted.mean(Y[X==1], W[X==1], na.rm = TRUE),
+    (weighted.mean(Y[X==1], W[X==1], na.rm = TRUE) - weighted.mean(Y[X==0], W[X==0], na.rm = TRUE))/
+      (wt.sd(Y[X==0][K], W[X==0][K])),
+    sum(!is.na(Y[X==1 | X==0]))
+  )}
+
+#######
+# Function to calculate treatment effects
+#######
+
+analyze <- function(
+  .data = NULL,
+  .outcome = NULL,
+  .weights = "WEIGHT",
+  .cluster = "IDV_CDCCODE",
+  .treat = "TUUNGANE",
+  .controls = NULL,
+  .village_level = FALSE,
+  .within_village_interaction = NULL,  # If there is a within village interaction the village level analysis is done using  a difference on the LHS
+  .interaction_diff_impute = TRUE, # This is a greedy mean imputation so difference is calculated even if there is data for only one side of difference
+  .subgroupcondition = "NONE"
+) {
+  # Condition on subgroup if necessary  
+  if(.subgroupcondition!="NONE"){
+    .condition <- paste0(".data <- .data[.data$", .subgroupcondition,",]")
+    #    .condition <- paste0(".data <- .data[", .subgroupcondition,",]")
+    eval(parse(text=.condition))
+  }
+  # Aggregate if necessary  
+  if(.village_level & is.null(.within_village_interaction)) .data <-aggregate(.data, by=list(.data$IDV), FUN="mean", na.rm=TRUE)
+  if(.village_level & !is.null(.within_village_interaction) ){
+    .data0 <- .data[,c(.within_village_interaction, .outcome, "IDV")][.data[,.within_village_interaction]==0,]
+    .data0 <- agg_to_mean(data = .data0,  by=list(.data0$IDV))
+    .data0$Y0 <- .data0[,.outcome]
+    .data1 <- .data[,c(.within_village_interaction, .outcome, "IDV")][.data[,.within_village_interaction]==1,]
+    .data1 <- agg_to_mean(data = .data1,  by=list(.data1$IDV))
+    .data1$Y1 <- .data1[,.outcome]
+    .data01   <-  merge(select(.data0, IDV, Y0), select(.data1, IDV, Y1), by = "IDV", all = TRUE)
+    .data <- aggregate(.data, by=list(.data$IDV), FUN="mean", na.rm=TRUE)
+    .data <- merge(.data, .data01, by = "IDV")
+    # Impute if necessary (to avoid NA in differences for village level analyses)
+    if(.interaction_diff_impute){
+      toimpute_diff <- (!is.na(.data$Y1) &  is.na(.data$Y0)) | (is.na(.data$Y1) &  !is.na(.data$Y0)) 
+      .data$Y0[toimpute_diff] <- mean(.data$Y0, na.rm = TRUE)
+      .data$Y1[toimpute_diff] <- mean(.data$Y1, na.rm = TRUE)}
+    
+    .data[,.outcome] <- .data$Y1 - .data$Y0 
+  }
+  
+  # Prep basic formula
+  if (!is.null(.controls))
+  {.formula <- as.formula(paste(.outcome, " ~ ", .treat, " + ", .controls))
+  }else{
+    .formula <- as.formula(paste(.outcome, " ~ ", .treat))
+  }
+  
+  .wt <- unlist(.data[,.weights])
+  
+  
+  if (!is.null(.cluster)) {
+    .cl <- unlist(.data[,.cluster])
+    # (
+    .lm <-
+      .data %>%
+      lm(formula = .formula,
+         data = .,
+         weights = .wt) %>%
+      coeftest(x = .,
+               vcov. = cluster.vcov(., .cl))
+    # ) %>% pandoc.table()
+  } else {
+    # (
+    .lm <-
+      .data %>%
+      lm(formula = .formula,
+         data = .,
+         weights = .wt) %>%
+      coeftest(x = .)
+    # ) %>% pandoc.table()
+  }
+  # complete cases data
+  .data_frame <-
+    .data %>%
+    lm(formula = .formula,
+       data = .,
+       weights = .wt) %>%
+    model.frame()
+  
+  #.me <- paste0("mean(", .outcome, ", na.rm = TRUE)")
+  #.sd <- paste0("stats::sd(", .outcome, ", na.rm = TRUE)")
+
+.me <- paste0("SDMTools::wt.mean(x=", .outcome, ", wt = `(weights)`)")  
+.sd <- paste0("SDMTools::wt.sd(x=", .outcome, ", wt =`(weights)`)")
+.co <- paste0("sum(!is.na(", .outcome, "))")
+
+    # (
+  .sum <-
+    # .data %>%
+    .data_frame %>%
+    group_by_(.treat) %>%
+    dplyr::summarise_(
+      mean = .me,
+      sd = .sd,
+      count = .co)
+  # ) %>% pandoc.table()
+  return(list(.lm,
+              .sum))
+}
+
+
+#######
+# Function to resave
+#######
+
+resave <- function(..., list = character(), file) {
+  previous  <- load(file)
+  var.names <- c(list, as.character(substitute(list(...)))[-1L])
+  for (var in var.names) assign(var, get(var, envir = parent.frame()))
+  save(list = unique(c(previous, var.names)), file = file)
+}
+
+
+#######
+# Function to cluster
+#######
+
+#' Cluster robust standard errors
+#'
+#' Take a model and cluster variable and returns summary output
+#' @param model A model eg from lm
+#' @param cluster A variable
+#' @keywords Cluster, Robust
+#' @export
+#' @examples
+#'  cluster_robust(lm(time~temp, data = beaver1), beaver1$day)
+#'
+cluster_robust <- function(model, cluster){
+  require(sandwich, quietly = TRUE)
+  require(lmtest, quietly = TRUE)
+  not.miss<- !is.na(predict(model))
+  if(length(not.miss)!=length(cluster)){
+    stop("check your data: cluster variable has different N than model")
+  }
+  M <- length(unique(cluster[not.miss]))
+  N <- length(cluster[not.miss])
+  K <- model$rank
+  if(M<50){
+    warning("Fewer than 50 clusters, variances may be unreliable (could try block bootstrap instead).")
+  }
+  dfc <- (M/(M - 1)) * ((N - 1)/(N - K))
+  uj  <- apply(estfun(model), 2, function(x) tapply(x, cluster, sum, na.rm=TRUE));
+  vcovCL <- dfc * sandwich(model, meat = crossprod(uj)/N)
+  out <- list()
+  out[[1]] <- coeftest(model, vcovCL)
+  out[[2]] <- N
+  return(out)
+}
+
+#' Runs lm and returns cluster robust standard errors
+#'
+#' Take a model and cluster variable and returns summary output
+#' @param formula An lm formula of the form Y~X
+#' @param data A dataframe
+#' @keywords Cluster, Robust
+#' @export
+#' @examples
+#'  lm_cluster_robust("time~temp", beaver1, "day")
+#'
+
+lm_cluster_robust <- function(formula, data, cluster_name){
+  model <- lm(as.formula(formula), data = data, na.action="na.exclude" )
+  cluster_robust(model, data[cluster_name][[1]])
+}
+
+
+#######
+# Function to generate nice output after cluster robust
+#######
+
+
+#' Take a model and cluster variable and returns summary output
+#' @param X a list output from lm_cluster_robust
+#' @param coefrows rows of coefficients to  grab
+#' @keywords Cluster, Robust
+#' @export
+#' @examples
+#'  output_function(lm_cluster_robust("time~temp", beaver1, "day"), coefrows = 2)
+#'
+output_function <- function(X, stars = TRUE, round = 3, alpha = 0.05, coefrows = c(2:4)){
+  ncoefs <- length(coefrows)
+  out <- names <- matrix(NA, 2*ncoefs+1)
+  
+  out[2*(1:ncoefs)-1] <-  round(X[[1]][coefrows,1],3)
+  out[2*(1:ncoefs)] <-  paste("(", round(X[[1]][coefrows,2],3), ")", sep ="")
+  out[2*ncoefs+1] <- X[[2]]
+  
+  if(stars) out[2*(1:ncoefs)][X[[1]][coefrows,4] <= alpha] <-  
+    paste(out[2*(1:ncoefs)][X[[1]][coefrows,4] <= 0.05], "**", sep ="")
+  
+  names[2*(1:ncoefs)-1] <- rownames(X[[1]])[coefrows]
+  names[2*(1:ncoefs)] <- paste("sd_", rownames(X[[1]])[coefrows], sep = "")
+  names[2*ncoefs+1] <- "N"
+  rownames(out) <- names
+  
+  out
+}
+
+
+#######
+# Function for mean effects
+#######
+
+#' Calculate Mean Effects Index
+#'
+#' Thanks to Tara Slough and egap for much of this coding
+#' @param Z Binary Treatment
+#' @param outcome_mat Matrix of outcome vars: should all  be signed in same direction
+#' @param reorient Vector indicating rows to reorient
+#' @keywords multiple comparisons
+#' @export
+#' @examples
+#' Z <- rep(0:1,3)
+#' Y <- data.frame(1:6, 2:7)
+#' calculate_mean_effects_index(Z,Y)
+#' calculate_mean_effects_index(Z,Y, reorient = c(FALSE, TRUE))
+#' calculate_mean_effects_index(Z,Y, reorient = c(FALSE, TRUE), double_normalization=FALSE)
+#' Y[1,1] <- NA
+#' calculate_mean_effects_index(Z,Y, greedy = FALSE)
+#' calculate_mean_effects_index(Z,Y, greedy = TRUE)
+#' calculate_mean_effects_index(Z,Y, impute = TRUE)
+#' calculate_mean_effects_index(Z,Y, impute = TRUE, greedy = TRUE)
+
+#calculate_mean_effects_index <- function(Z,                # Treatment
+#                                         outcome_mat, 
+#                                        reorient = rep(FALSE, ncol(outcome_mat)), 
+#                                        greedy = TRUE,
+#                                        impute = FALSE, 
+#                                        seed = NULL,
+#                                        double_normalization = TRUE
+#){
+# 
+# if(!is.null(seed)) set.seed(seed)
+# if(length(Z) != nrow(outcome_mat)) stop("Error: Treatment assignment, outcome matrix require same n!")
+# 
+# missing <- is.na(outcome_mat)
+# if(impute == TRUE){
+#   R <- 1 * missing
+#   means_for_imputation <- rbind(apply(outcome_mat[Z==0,], MAR = 2, FUN = mean, na.rm = TRUE),
+#                                 apply(outcome_mat[Z==1,], MAR = 2, FUN = mean, na.rm = TRUE))
+#   to_impute <- R * means_for_imputation[Z+1,]
+#   outcome_mat[is.na(outcome_mat)] <- 0
+#   outcome_mat <- outcome_mat + to_impute
+# }
+# 
+# outcome_mat[, reorient] <- -outcome_mat[, reorient] 
+# 
+# c_mean <- apply(X = outcome_mat[Z==0,], MARGIN = 2, FUN = mean, na.rm = T)
+# c_sd <- apply(X = outcome_mat[Z==0,], MARGIN = 2, FUN = sd, na.rm = T)
+# z_score <- t(t(sweep(outcome_mat, 2, c_mean))/ c_sd)
+# 
+# if(greedy)  index <-  apply(z_score, 1, mean, na.rm = TRUE)
+# if(!greedy) index <-  apply(z_score, 1, mean)
+# 
+# if(double_normalization) index <-  (index - mean(index[Z==0], na.rm =TRUE))/sd(index[Z==0], na.rm =TRUE)
+# return(index)
+#}
+
+#######
+# Function to do mean effects
+#######
+
+#rm(list = ls())
+
+# if (!require("pacman")) install.packages("pacman")
+# pacman::p_load(magrittr, # if package is missing install and load it; if not -- just load
+#                plyr,
+#                dplyr,
+#                haven)
+#
+# set.seed(1)
+# treat <- c(rep(0, 10), rep(1,10))
+# weight <- runif(20)
+# Y1 <- treat + rnorm(20)
+# Y2 <- -treat + rnorm(20)
+# Y1[3] <- weight[5] <- NA
+# weight[1] <- 10^3
+# df <- data.frame(treat, weight, Y1, Y2)
+
+# df <- haven::read_dta("from_stata.dta") %>% as.data.frame
+
+# Stata uses analytic weights by default, which has weird formula
+#that one can look up in summarize command Stata manual
+# There are no weights in R function
+
+normalize <- function(.data,
+                      .treat,
+                      .weight,
+                      .outcome,
+                      .stats = NULL) {
+  # create temporary dataset  without missngness in
+  # .weight, .outcome and filtered by .treat == 0
+  .temp <-
+    .data[!is.na( eval(parse(text = paste0(".data$", .weight))) ) &
+            !is.na( eval(parse(text = paste0(".data$", .outcome))) ) &
+            eval(parse(text = paste0(".data$", .treat))) == 0, ]
+  # get the weighted mean of .outcome variable
+  Ymean <-  weighted.mean(x = .temp[ , .outcome],
+                          w = .temp[ , .weight],
+                          na.rm = TRUE)
+  # get the analytic weighted std. dev. of .outcome variable
+  Yvar <- ( nrow(.temp) / (sum(.temp[ , .weight]) * (nrow(.temp) - 1)) ) *
+    sum( .temp[ , .weight] * (.temp[ , .outcome] - Ymean)^2 )
+  # return normalized vector of .outcome
+  if (is.null(.stats)) return( (.data[ , .outcome] - Ymean)/sqrt(Yvar) )
+  else return(list(".outcome_norm" = (.data[ , .outcome] - Ymean)/sqrt(Yvar),
+                   ".outcome_mean" = Ymean,
+                   ".outcome_sd" = sqrt(Yvar)))
+}
+
+# try out the normalize function
+#normalize(.data = df,
+#          .treat = "treat",
+#          .weight = "weight",
+#          .outcome = "Y1")
+
+wmeaneffects <- function(.data,
+                         .treat,
+                         .weight,
+                         .outcomes,
+                         .varname = "index_new",
+                         .cond = NULL) {
+  require(magrittr)
+  require(plyr)
+  require(dplyr)
+  
+  if (is.null(.cond)) {
+    .subset <- rep(TRUE, times = nrow(.data))
+    .temp <- .data
+  } else {
+    .subset <- eval(expr = parse(text = .cond),
+                    envir = .data,
+                    enclos = parent.frame())
+    .temp <- .data[.subset, ]
+  }
+  
+  .out <- rep(NA, times = nrow(.data)) %>% cbind
+  colnames(.out) <- .varname
+  .out[.subset,.varname] <-
+    .temp %>%
+    sapply(X = .outcomes,
+           FUN = normalize,
+           .data = .,
+           .treat = .treat,
+           .weight = .weight) %>%
+    apply(MARGIN = 1,
+          FUN = mean,
+          na.rm = TRUE) %>%
+    cbind(.temp, "meaneff" = . ) %>%
+    as.data.frame %>%
+    normalize(.data = .,
+              .treat = .treat,
+              .weight = .weight,
+              .outcome = "meaneff") %>%
+    round(digits = 6) %>%
+    as.vector
+  return(.out)
+}
+
+# wmeaneffects(.data = df,
+#             .treat = "treat",
+#             .weight = "weight",
+#             .outcomes = c("Y1", "Y2"))
+#
+# wmeaneffects(.data = df,
+#             .treat = "treat",
+#             .weight = "weight",
+#             .outcomes = c("Y1", "Y2"),
+#             .cond = "weight < 1000 & !is.na(weight)" )
+
+
+#######
+# Function to plot from a matrix
+#######
+
+mat_plot = function(b, se, 
+                    title="Plot", 
+                    rnames = 1:nrow(b),
+                    rnames_sub = NA,  
+                    p=matrix(NA,nrow(b), 
+                             ncol(b)), 
+                    cnames = NULL,  
+                    diag=0, norm = 1.5, 
+                    tick = .2, tick2=tick/2, ticktextsize = .5, rset=0, rset2=.5, uset = 1, 
+                    bottom=0,  gap=.15, groups=1, z=1.96, z2=1.645, ninety=1, textsize=1, 
+                    pdigit=3, rnamestab=0){
+  b = as.matrix(b)
+  se = as.matrix(se)
+  
+  w = ncol(b)/groups
+  h = nrow(b)
+  plot((1+rset):(w+rset), (1:w)*((h*groups+uset*2)), type = "n", axes=FALSE, xlab="", ylab="", ylim= c(bottom, h+uset*2), xlim= c(0, w+.5+rset), main=title)
+  se_ = se*norm
+  b_ = b*norm
+  
+  for(i in 1:w){                                                 # Columns
+    segments(i+rset, .5+uset, i+rset, h+uset+.5, col="grey") # draw vertical lines at zero  
+    for(j in 1:((i-1)*diag+(1-diag)*h))							# Rows		
+    {
+      if(is.na(b[j,i])==FALSE){
+        segments(max(i+rset+ b_[j,i]-z*se_[j,i], i+rset -.4), j+uset, min(i+ rset+ b_[j,i]+z*se_[j,i],i+ rset+ .4), j+uset)
+        if(is.na(p[j,i])==FALSE) {text(i+rset, j+1.25*uset, paste("p=",  formatC(p[j,i], format = "f", digits = pdigit), sep=""), cex=.75*textsize)}
+        # Add in 95% ticks
+        if(ninety==1){
+          if(i+rset+ b_[j,i]-z2*se_[j,i]> i+rset -.4){segments(i+rset+ b_[j,i]-z2*se_[j,i], j+uset- gap/4, i+rset+ b_[j,i]-z2*se_[j,i], j+uset+gap/4)}
+          if(i+ rset+ b_[j,i]+z2*se_[j,i]< i+ rset+ .4){segments(i+rset+ b_[j,i]+z2*se_[j,i], j+uset- gap/4, i+rset+ b_[j,i]+z2*se_[j,i], j+uset+gap/4)}
+        }						
+        if((i+rset+ b_[j,i]>i+rset -.4)&(i+rset+ b_[j,i]<i+rset +.4)){points(i+rset+ b_[j,i], j+uset, pch=19)}				# Points		
+        if(groups==2){ 
+          segments(max(i+rset+ b_[j,i+w]-z*se_[j,i+w],i+rset -.4), j+uset-gap, min(i+ rset+ b_[j,i+w]+z*se_[j,i+w], i+ rset+ .4), j+uset-gap)
+          if((i+rset+ b_[j,i+w]>i+rset -.4)&(i+rset+ b_[j,i+w]<i+rset +.4)){points(i+rset+ b_[j,i+w], j+uset - gap, pch=21, bg="white")}				# Points		
+          # Add in 95% ticks							
+          if(ninety==1){
+            if(i+rset+ b_[j,i+w]-z2*se_[j,i+w]> i+rset -.4){segments(i+rset+ b_[j,i+w]-z2*se_[j,i+w], j+uset- 5*gap/4, i+rset+ b_[j,i+w]-z2*se_[j,i+w], j+uset-3*gap/4)}
+            if(i+ rset+ b_[j,i+w]+z2*se_[j,i+w]< i+ rset+ .4){segments(i+rset+ b_[j,i+w]+z2*se_[j,i+w], j+uset- 5*gap/4, i+rset+ b_[j,i+w]+z2*se_[j,i+w], j+uset-3*gap/4)}}
+        }}
+      segments(i +rset -.4, .5+uset, i+ rset+.4, .5+uset)
+      text(i +rset, .35+uset, 0, cex=ticktextsize)
+      text(i+rset+ tick*norm, .35+uset, tick, cex=ticktextsize)  # Major tick
+      text(i+rset-tick*norm, .35+uset, -tick, cex=ticktextsize)
+      segments(i+rset+tick*norm, .5+uset, i+rset+tick*norm, .45+uset)
+      segments(i+rset-tick*norm, .5+uset, i+rset-tick*norm, .45+uset)
+      text(i+rset+ tick2*norm, .35+uset, tick2, cex=ticktextsize)    # Minor  tick
+      text(i+rset-tick2*norm, .35+uset, -tick2, cex=ticktextsize)
+      segments(i+rset+tick2*norm, .5+uset, i+rset+tick2*norm, .45+uset)
+      segments(i+rset-tick2*norm, .5+uset, i+rset-tick2*norm, .45+uset)
+      segments(i+rset, .5+uset, i+rset, .45+uset)
+    }}
+  text(0+rnamestab, (1+uset):(h+uset) + gap*(1-groups)/2, rnames, cex = textsize, adj=c(0,.5))
+  if(groups==2) {text(rset+rset2, sapply(1:h, function(i) c(i+uset, i+uset-gap)), rnames_sub, cex = textsize, adj=c(0,.5))}
+  text((1+rset):(w+rset),h+uset+.75,  cnames[1:w], cex = textsize)
+}	
+
+#######
+# Function to 
+# "fixdec"
+#######
+
+fixdec <- function(.x, .dec = 3, .brac = FALSE) {
+  if (.brac) format(round(.x, .dec), nsmall = .dec) %>% paste0("(", . , ")")
+  else format(round(.x, .dec), nsmall = .dec)
+}
+
+####### 
+# Function to extract tables of different results for different conditions
+# Function to extract results  -- used for making tables; note that "take" takes 4 for interaction terms
+# of one can also put in the name of the variables which is generally safer
+####### 
+
+get.results = function(L, 
+                       take = c(rep("TUUNGANE",2),"TUUNGANE:RA",rep("TUUNGANE",1),"TUUNGANE:CHIEFTRUE",rep("TUUNGANE",10),"TUUNGANE:IDS_RAPID"), 
+                       elements = 1:length(take),
+                       round = 2
+) {
+  x<-t({sapply(elements, function(i) {
+    if(is.numeric(take[i]))  out <- c(row.names(L[[i]][[1]])[take[i]], round(L[[i]][[1]][take[i],],round))
+    if(!is.numeric(take[i])) out <- c(take[i], round(L[[i]][[1]][row.names(L[[i]][[1]])==take[i],],round)) 
+    return(out)})
+  })
+  
+  out <- apply(x[,-1], 2,as.numeric)
+  row.names(out) <- paste0(elements,"_",x[,1])
+  return(out)
+}
+
+get.results.tab = function(L, 
+                           take = c(rep("TUUNGANE",2),"TUUNGANE:RA",rep("TUUNGANE",1),"TUUNGANE:CHIEFTRUE",rep("TUUNGANE",10),"TUUNGANE:IDS_RAPID"), 
+                           main = c(rep(NA,2),"RA",rep(NA,1),"CHIEFTRUE",rep(NA,10),"IDS_RAPID"), 
+                           elements = 1:length(take),
+                           rounder = 3
+) {
+  x<-t({sapply(elements, function(i) {
+    X1 <- L[[i]][[1]]
+    X2 <- L[[i]][[2]]
+    if(is.numeric(take[i]))  out <- c(row.names(X1)[take[i]], X1[take[i],])
+    if(!is.numeric(take[i])) out <- c(take[i], X1[row.names(X1)==take[i],]) 
+    if(is.na(main[i]))    out <- c(out, control = X2[1,2], N = sum(X2[,4]))
+    if(!is.na(main[i]))   out <- c(out, control = X1[row.names(X1)==main[i],][1], N = sum(X2[,4]))
+    return(  unlist(out))})
+  })
+  
+  # Format for table
+  x0 <- apply(x[,-1], 2,as.numeric)
+  sds <- paste("(", round(x0[,2],rounder), ifelse(x0[,4] < 0.05, "**", ""),")", sep = "")
+  cbind(x[,1], round(x0[,c(5,1)],rounder), sds,x[,7])
+}
+
+mat_to_tex <- function(mat, rownames = NULL, add_slashes = TRUE) {
+  if(!is.null(rownames)) mat <- cbind(rownames, mat)
+  x <- t(sapply(1:nrow(mat), function(j)  paste(mat[j,], collapse  = "&")))
+  if(add_slashes) x <- paste(x, rep("\\\\", nrow(mat)))
+  as.matrix(x, nrow(mat),1)
+}
+
+
+tablr <- function(x){
+  x <- paste(x,"  \n",sep="")
+  cat(x)
+}
+
+
+
+#######
+# Function to 
+#######
+
+out_line <- function(.out_list,
+                     .dec_pattern = c(2,2,2,0),
+                     .brac_pattern = c(F,F,T,F)) {
+  mapply(fixdec,
+         c(.out_list[[1]][c(dim(.out_list[[1]])[1] - 1,
+                            dim(.out_list[[1]])[1]),1],
+           .out_list[[1]][dim(.out_list[[1]])[1],2],
+           sum(.out_list[[2]][,4])),
+         .dec_pattern,
+         .brac_pattern) %>%
+    unname() %>%
+    return()
+}
+
+#######
+# Function to 
+#######
+
+out_balance <- function(.out_list,
+                        .dec_pattern = c(2,2,2,0),
+                        .brac_pattern = c(F,F,F,F)) {
+  mapply(fixdec,
+         c(as.matrix(.out_list[[2]])[c(2,1),2],
+           .out_list[[1]][dim(.out_list[[1]])[1],1],
+           sum(.out_list[[2]][,4])),
+         .dec_pattern,
+         .brac_pattern) %>%
+    unname() %>%
+    return()
+}
+
+#######
+# Function to 
+#######
+
+out_robust <- function(.out_list,
+                       .dec_pattern = c(2,2),
+                       .brac_pattern = c(F,T),
+                       .coef_pattern = 4) {
+  if (dim(.out_list[[1]])[1] > 2)  {
+    mapply(fixdec,
+           .out_list[[1]][.coef_pattern,c(1,2)],
+           .dec_pattern,
+           .brac_pattern) %>%
+      unname() %>%
+      paste0(collapse = " ") %>%
+      return()
+  } else {
+    mapply(fixdec,
+           .out_list[[1]][dim(.out_list[[1]])[1],c(1,2)],
+           .dec_pattern,
+           .brac_pattern) %>%
+      unname() %>%
+      paste0(collapse = " ") %>%
+      return()
+  }
+}
+
+#######
+# Generate MDE plots
+#######
+
+mde_plot <- function(diagnoses, main = "", xlim = c(0,1)){
+  plot(abs(diagnoses[[2]]$mean_estimand), diagnoses[[2]]$power, ylim = c(0,1), xlim = xlim, 
+       main = main, xlab = "ATE", ylab = "power", type = "b")
+  abline(a = .8, b = 0)
+}
+
+#######
+# Report mean in two groups and standardized difference 
+#######
+
+balance_function <- function(Y,X,W = rep(1, length(X))){
+  
+  K <- (!is.na(Y[X==0]) & !is.na(W[X==0]))
+  c(
+    weighted.mean(Y[X==0], W[X==0], na.rm = TRUE),
+    weighted.mean(Y[X==1], W[X==1], na.rm = TRUE),
+    (weighted.mean(Y[X==1], W[X==1], na.rm = TRUE) - weighted.mean(Y[X==0], W[X==0], na.rm = TRUE))/
+      (wt.sd(Y[X==0][K], W[X==0][K])),
+    sum(!is.na(Y[X==1 | X==0]))
+  )}
+
+#####
+# Load data set
+#####
+
+load_file <- function(data_file = "", path = local_datapath){
+  haven::read_dta(file = paste(path, data_file, sep = "/"))
+}
+
+#####
+# spillover weights
+#####
+
+# A general function to figure weights -- needed for RI 
+# Cases will be dropped if weight = Inf or weight = 1
+# cap of weight = 20 placed on weights
+gen_weight05 = function(D, I, data = gps, cap = 20){
+  w  <- rep(NA, nrow(data))
+  w[D ==1 & I ==1] <- data$wDI_05[D ==1 & I ==1]
+  w[D ==0 & I ==1] <- data$w0I_05[D ==0 & I ==1]
+  w[D ==1 & I ==0] <- data$wD0_05[D ==1 & I ==0]
+  w[D ==0 & I ==0] <- data$w00_05[D ==0 & I ==0]
+  w[w == Inf] <- NA
+  w[w == 1]   <- NA
+  w[w > cap] <- cap
+  return(w)
+}
+
+gen_weight20 = function(D, I, data = gps, cap = 20){
+  w  <- rep(NA, nrow(data))
+  w[D ==1 & I ==1] <- data$wDI_20[D ==1 & I ==1]
+  w[D ==0 & I ==1] <- data$w0I_20[D ==0 & I ==1]
+  w[D ==1 & I ==0] <- data$wD0_20[D ==1 & I ==0]
+  w[D ==0 & I ==0] <- data$w00_20[D ==0 & I ==0]
+  w[w == Inf] <- NA
+  w[w == 1]   <- NA
+  w[w > cap] <- cap
+  return(w)
+}
+
+#####
+# function to assess how many treated villages from outside CDC within distance X?
+#####
+
+indirect = function(d = 5, adjac = adj, treated = gps$TUUNGANE, binary = TRUE){
+  close <- (adjac <= d) & !same_cdc 
+  out <- treated %*% close
+  if(binary) out <- 1*(out > 0) #REVIEWED OLD: 1*(out > 1)
+  return(as.numeric(out))
+}
+
+## END ##
+

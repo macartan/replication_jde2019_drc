@@ -1,0 +1,435 @@
+
+############################
+## CAPTURE
+############################
+
+
+###########
+#1 Financial Irregularities
+###########
+counter <- 1  # for trouble shooting
+
+# FIRST OUTCOME DEFINED AS SHARE OF 1000 NOT VERIFIABLE
+D_AUDIT %<>%
+  dplyr::mutate(da109_not_verifiable =
+                  ifelse(da109_not_verifiable == 3680,
+                         yes = 368,
+                         no = da109_not_verifiable),
+                da109_not_verifiable =
+                  ifelse(test = da109_not_verifiable > 1000 | da109_not_verifiable < 0,
+                         yes = NA,
+                         no = da109_not_verifiable),
+                WEIGHT = IDV_PROPENSITY_WEIGHT_ADJ *2)
+
+
+D_AUDIT_NOTVERI <- D_AUDIT
+D_AUDIT_NOTVERI %<>%
+  group_by(IDV) %>%
+  dplyr::summarize(da109_not_verifiable,
+                   WEIGHT,
+                   IDV_CDCCODE,
+                   LOTT_BIN,
+                   NOSCHOOLS,
+                   INHERITED,
+                   NOCOMMITTEE,
+                   VILL_WEIGHT,
+                   PWEIGHT2,
+                   TUUNGANE,
+                   IRC_TUUNGANE) 
+
+D_AUDIT_NOTVERI %<>%
+  mutate(da109_not_verifiable = da109_not_verifiable / 1000,
+         da109_verifiable =  ifelse(da109_not_verifiable > 1,
+                                    yes = NA,
+                                    no = 1 - da109_not_verifiable)) 
+
+###########
+#2 Embezzlement: DIRECT
+###########
+counter <- 2  # for trouble shooting
+
+ABD_INDIV_DIRECT <- ABD_INDIV
+table(ABD_INDIV_DIRECT$qr026i_fund_misuse)
+
+ABD_INDIV_DIRECT$WEIGHT <- ABD_INDIV_DIRECT$IDS_HH_SAMP_PROP_W_DML * 5 / 2
+
+ABD_INDIV_DIRECT %<>%
+  group_by(IDS) %>%
+  dplyr::summarize(qr026i_fund_misuse,
+                   TUUNGANE,
+                   IRC_TUUNGANE,
+                   WEIGHT,
+                   IDS_CDCCODE,
+                   LOTT_BIN,
+                   NOSCHOOLS,
+                   INHERITED,
+                   NOCOMMITTEE,
+                   VILL_WEIGHT,
+                   PWEIGHT2,
+                   IDS_HH_SAMP_WEIGHT_DML,
+                   IDV) %>%
+  dplyr::filter(!is.na(TUUNGANE)) 
+
+###########
+#3 Embezzlement: LIST
+###########
+counter <- 3  # for trouble shooting
+
+# This is the list experiment
+# v8_sensitive_rapid: respondent received RA or RB. RA = ABCD,WXZ RB = ABD, WXYZ. C and Y are sensitive.
+# RA is treatment in first list, control in second list. 
+# RB is control in first list, treatment in second list 
+# qr2729_list_experiment: response to AB(C)D  
+# qr2830_list_experiment: response to WX(Y)Z
+# qr026i_fund_misuse: direct question   
+
+# v8_sensitive_rapid has been taken out of ABD_INDIV. Needs to be merged back in
+ABD_INDIV_LIST <- ABD_INDIV
+v8 <- read.dta("Data/v8.dta", convert.factors=FALSE)
+ABD_INDIV_LIST <- merge(ABD_INDIV_LIST, v8, by = "IDS")
+table(ABD_INDIV_LIST$v8_sensitive_rapid)
+table(ABD_INDIV_LIST$RAPID)
+ABD_INDIV_LIST$WEIGHT <- ABD_INDIV_LIST$IDS_HH_SAMP_PROP_W_DML * 5 / 2
+
+table(ABD_INDIV_LIST$qr2729_list_experiment, ABD_INDIV_LIST$v8_sensitive_rapid)
+table(ABD_INDIV_LIST$qr2830_list_experiment, ABD_INDIV_LIST$v8_sensitive_rapid)
+sum(table(ABD_INDIV_LIST$qr2830_list_experiment))
+
+table(ABD_INDIV_LIST$qr026i_fund_misuse)
+
+# ca 1900  in A and 1900 in B; only 3179 responses in 27/29 and 3700 (OK) responses to 2830
+
+# Clean
+ABD_INDIV_LIST %<>%
+  # asked to both DML and DMC
+  # 17 known errors removed here:
+  # 11 have "4" while they are control in List A
+  # 6 have "4" while they are control in List B	
+  dplyr::mutate(qr2729_list_experiment =
+                  ifelse(v8_sensitive_rapid=="RB" & qr2729_list_experiment==4,
+                         yes = NA,
+                         no = qr2729_list_experiment),
+                qr2830_list_experiment =
+                  ifelse(v8_sensitive_rapid=="RA" & qr2830_list_experiment==4,
+                         yes = NA,
+                         no = qr2830_list_experiment))
+
+ABD_INDIV_LIST$MFI_COMPLAINTS <-
+  ABD_INDIV_LIST %>%
+  data.frame %>%
+    wmeaneffects(.data = .,
+               .treat = "TUUNGANE",
+               .weight = "WEIGHT",
+               .outcomes = c("qr026a_length",
+                             "qr026b_rapid_behavior",
+                             "qr026c_unimportant",
+                             "qr026d_reduced_help",
+                             "qr026e_no_influence",
+                             "qr026f_disagreement",
+                             "qr026g_steps",
+                             "qr026h_lack_info",
+                             "qr026i_fund_misuse",
+                             "qr026j_allocation",
+                             "qr026k_conflicts",
+                             "qr026l_controled_chef",
+                             "qr026m_unrepresented"),
+               .cond = "!is.na(TUUNGANE)",
+               .varname = "MFI_COMPLAINTS") %>%
+  unlist %>%
+  as.vector
+
+ABD_INDIV_LIST$RA <-NA
+ABD_INDIV_LIST$RA[ABD_INDIV_LIST$v8_sensitive_rapid=="RA"] <- 1
+ABD_INDIV_LIST$RA[ABD_INDIV_LIST$v8_sensitive_rapid=="RB"] <- 0
+ABD_INDIV_LIST$RB <- 1-ABD_INDIV_LIST$RA
+
+ABD_INDIV_LIST %<>% mutate(tuu_RA = TUUNGANE * RA,
+                           tuu_RB = TUUNGANE * RB)
+nrow(ABD_INDIV_LIST)
+ABD_INDIV_LIST %<>%
+  group_by(IDS) %>%
+  dplyr::summarize(qr2729_list_experiment,
+                   qr2830_list_experiment,
+                   qr026i_fund_misuse,
+                   MFI_COMPLAINTS,
+                   RA,
+                   RB,
+                   LOTT_BIN,
+                   NOSCHOOLS,
+                   INHERITED,
+                   NOCOMMITTEE,
+                   VILL_WEIGHT,
+                   PWEIGHT2,
+                   tuu_RA,
+                   tuu_RB,
+                   TUUNGANE,
+                   IRC_TUUNGANE,
+                   WEIGHT,
+                   IDS_CDCCODE,
+                   IDS_HH_SAMP_WEIGHT_DML,
+                   IDV) %>%
+  dplyr::filter(!is.na(TUUNGANE)) 
+nrow(ABD_INDIV_LIST)
+
+head(ABD_INDIV_LIST)
+
+# Both seem to be measured with a lot of accuracy (no clustering here)
+# Answers strongly associated with complaints in general;
+# Controlling for general complaints does not alter estimate  much
+coef(summary(lm(qr2729_list_experiment~RA, data = ABD_INDIV_LIST)))
+coef(summary(lm(qr2729_list_experiment~RA +MFI_COMPLAINTS, data = ABD_INDIV_LIST)))
+coef(summary(lm(qr2729_list_experiment~RA*qr026i_fund_misuse, data = ABD_INDIV_LIST)))
+
+coef(summary(lm(qr2830_list_experiment~RB, data = ABD_INDIV_LIST)))
+coef(summary(lm(qr2830_list_experiment~RB+MFI_COMPLAINTS, data = ABD_INDIV_LIST)))
+coef(summary(lm(qr2830_list_experiment~RB*qr026i_fund_misuse, data = ABD_INDIV_LIST)))
+
+coef(summary(lm(qr026i_fund_misuse ~ TUUNGANE, data = ABD_INDIV_LIST)))
+# Missingness seems unassociated with treatment
+sum(!is.na(ABD_INDIV_LIST$qr2729_list_experiment[ABD_INDIV_LIST$RA==1]))
+sum(!is.na(ABD_INDIV_LIST$qr2729_list_experiment[ABD_INDIV_LIST$RA==0]))
+sum(!is.na(ABD_INDIV_LIST$qr2830_list_experiment[ABD_INDIV_LIST$RA==1]))
+sum(!is.na(ABD_INDIV_LIST$qr2830_list_experiment[ABD_INDIV_LIST$RA==0]))
+
+
+###########
+#4 Number of beneficiaries
+###########
+counter <- 4  # for trouble shooting
+
+ABD_INDIV %<>%
+  dplyr::mutate(did_benefit = qr003_did_you_benefit,
+                did_benefit =
+                  ifelse(test = did_benefit < 0,
+                         yes = NA,
+                         no = did_benefit))
+
+ABD_INDIV$number_benefit <- with(data = ABD_INDIV,
+                                 unsplit(value = tapply(X = did_benefit, INDEX = IDV, FUN = sum, na.rm = TRUE),
+                                         f = IDV))
+
+ABD_INDIV$total_resp <- with(data = ABD_INDIV,
+                             unsplit(value = tapply(X = did_benefit, INDEX = IDV, FUN = nobs),
+                                     f = IDV))
+
+ABD_INDIV_RAPID <- ABD_INDIV
+ABD_INDIV_RAPID %<>%
+  dplyr::mutate(proportion_beneficiaries = (number_benefit/total_resp),
+                proportion_benef = (proportion_beneficiaries * 100),
+                WEIGHT = (IDS_HH_SAMP_PROP_W_ANY * 2)) %>%
+  dplyr::filter(IDS_RAPID != 0)
+
+
+
+# running collapse by IDV even though using IDS variables; alt is to cluster
+ABD_INDIV_PROP <- ABD_INDIV_RAPID
+
+ABD_INDIV_PROP %<>%
+  group_by(IDV) %>%
+  dplyr::summarize(proportion_benef = mean(proportion_benef, na.rm = TRUE),
+                   TUUNGANE = mean(TUUNGANE, na.rm = TRUE),
+                   IRC_TUUNGANE = mean(IRC_TUUNGANE, na.rm = TRUE),
+                   LOTT_BIN = mean(LOTT_BIN, na.rm = TRUE),
+                   NOSCHOOLS = mean(NOSCHOOLS, na.rm = TRUE),
+                   INHERITED = mean(INHERITED, na.rm = TRUE),
+                   NOCOMMITTEE = mean(NOCOMMITTEE, na.rm = TRUE),
+                   VILL_WEIGHT = mean(VILL_WEIGHT, na.rm = TRUE),
+                   PWEIGHT2 = mean(PWEIGHT2, na.rm = TRUE),
+                   WEIGHT = mean(WEIGHT, na.rm = TRUE),
+                   IDS_CDCCODE = mean(IDS_CDCCODE, na.rm = TRUE),
+                   IDS_RAPID = mean(IDS_RAPID, na.rm = TRUE))
+
+ABD_INDIV_PROP %<>%
+  dplyr::mutate(proportion_benef =
+                  #                ifelse(test = proportion_benef <= 0,
+                  ifelse(test = proportion_benef < 0,
+                         yes = NA,
+                         no = proportion_benef))
+
+###########
+#5 Inequality of benefits
+###########
+counter <- 5  # for trouble shooting
+
+ABD_INDIV_BEN <- ABD_INDIV
+ABD_INDIV_BEN <- dplyr::filter(ABD_INDIV_BEN,
+                               IDS_RAPID == 1,
+                               IDS_TYPES == "DMC" | IDS_TYPES == "DML" | IDS_TYPES == "")
+
+ABD_INDIV_BEN <- dplyr::mutate(ABD_INDIV_BEN,
+                               did_benefit = as.integer(qr003_did_you_benefit) - 4,
+                               did_benefit = ifelse(test = did_benefit < 0,
+                                                    yes = NA,
+                                                    no = did_benefit))
+
+ABD_INDIV_BEN$number_benefit <- with(data = ABD_INDIV_BEN,
+                                     unsplit(value = tapply(X = did_benefit, INDEX = IDV, FUN = sum),
+                                             f = IDV))
+
+ABD_INDIV_BEN$total_resp <- with(data = ABD_INDIV_BEN,
+                                 unsplit(value = tapply(X = did_benefit, INDEX = IDV, FUN = nobs),
+                                         f = IDV))
+
+ABD_INDIV_BEN <- dplyr::mutate(ABD_INDIV_BEN,
+                               qr003_bis_value = ifelse(test = qr003_bis_value == -9,
+                                                        yes = NA,
+                                                        no = qr003_bis_value),
+                               qr003_bis_value = ifelse(test = qr003_bis_value == -8,
+                                                        yes = 0,
+                                                        no = qr003_bis_value),
+                               qr003_bis_value = ifelse(test = qr003_bis_value >100,
+                                                        yes = (qr003_bis_value/900),
+                                                        no = qr003_bis_value))
+
+ABD_INDIV_BEN$stdev__benefits <- with(data = ABD_INDIV_BEN,
+                                      unsplit(value = tapply(X = qr003_bis_value, INDEX = IDV,
+                                                             FUN = sd, na.rm = T),
+                                              f = IDV))
+ABD_INDIV_BEN$stdev_benefits <- with(data = ABD_INDIV_BEN,
+                                     unsplit(value = tapply(X = stdev__benefits, INDEX = IDV,
+                                                            FUN = mean),
+                                             f = IDV))
+ABD_INDIV_BEN$distribution_ <- with(data = ABD_INDIV_BEN,
+                                    unsplit(value = tapply(X = qr003_bis_value, INDEX = IDV,
+                                                           FUN = sum, na.rm = TRUE),
+                                            f = IDV))
+ABD_INDIV_BEN$distribution <- with(data = ABD_INDIV_BEN,
+                                   unsplit(value = tapply(X = distribution_, INDEX = IDV,
+                                                          FUN = mean),
+                                           f = IDV))
+
+ABD_INDIV_BEN %<>%
+  group_by(IDV) %>%
+  dplyr::summarize(distribution = mean(distribution, na.rm = TRUE),
+                   stdev_benefits = mean(stdev_benefits, na.rm = TRUE),
+                   LOTT_BIN = mean(LOTT_BIN, na.rm = TRUE),
+                   NOSCHOOLS = mean(NOSCHOOLS, na.rm = TRUE),
+                   INHERITED = mean(INHERITED, na.rm = TRUE),
+                   NOCOMMITTEE = mean(NOCOMMITTEE, na.rm = TRUE),
+                   VILL_WEIGHT = mean(VILL_WEIGHT, na.rm = TRUE),
+                   PWEIGHT2 = mean(PWEIGHT2, na.rm = TRUE),
+                   TUUNGANE = mean(TUUNGANE, na.rm = TRUE),
+                   IRC_TUUNGANE = mean(IRC_TUUNGANE, na.rm = TRUE),
+                   IDS_CDCCODE = mean(IDS_CDCCODE, na.rm = TRUE),
+                   IDS_HH_SAMP_PROP_W_ANY = mean(IDS_HH_SAMP_PROP_W_ANY, na.rm = TRUE))
+
+ABD_INDIV_BEN %<>%
+  dplyr::mutate(WEIGHT = (IDS_HH_SAMP_PROP_W_ANY * 2))  # %>%
+#  dplyr::filter(distribution != 0)
+# Note -- do not limit to places with distribution = 0 as this is post treatment selection
+
+
+###########
+#6 Dominance of Preferences: Most complete measure uses Step D to measure actual project choice
+###########
+counter <- 6  # for trouble shooting
+
+# Get a better measue of what project was selected; using step D.
+
+project_recode <- function(var){
+  car::recode(var, "
+              1:2='watsan'; 
+              c(15, 20)='education';
+              c(16,21)='health';
+              c(7,26,46)='transport';
+              c(9, 25,27, 34, 41, 45, 19,23,8,32,13,24,11,33,10, 42)='agric';
+              c(28,6,18,12) = 'private';
+              c(3, 14, 22, 31,29,43,5,4, 44, 49) = 'other'")
+ } 
+
+
+CHOICE_D <- select(ABD_INDIV, qr001_project_choice, IDS, IDV) %>%
+  mutate(projetChoice_d = ifelse(qr001_project_choice<0, NA, qr001_project_choice)) %>%
+  mutate(coarseChoice_d = project_recode(projetChoice_d)) 
+
+CHOICE_B <- select(ABD_VILL, b_23_project_has_been_chosen, IDV) %>%
+  mutate(projetChoice_b =   ifelse(b_23_project_has_been_chosen<0, NA, b_23_project_has_been_chosen)) %>%
+  mutate(coarseChoice_b = project_recode(projetChoice_b))
+
+CHOICE_VILL <- aggregate(cbind(coarseChoice_d, projetChoice_d) ~ IDV, CHOICE_D, Mode) %>%
+  merge(CHOICE_B, by = "IDV", all = TRUE)
+
+# Check shows great consistency between steps B and D
+table(CHOICE_VILL$coarseChoice_d, CHOICE_VILL$coarseChoice_b)
+
+
+# Get a measure of chief dominance using the answer from 5 people answering project preference from av_14
+CHIEF_DOM <- dplyr::select(ABD,
+                           IDV,
+                           IDS,
+                           IDS_TYPES,
+                           IDS_CDCCODE,
+                           av_14_bis_project_1,
+                           LOTT_BIN,
+                           NOSCHOOLS,
+                           INHERITED,
+                           NOCOMMITTEE,
+                           VILL_WEIGHT,
+                           PWEIGHT2,
+                           TUUNGANE,
+                           IRC_TUUNGANE) %>%
+  dplyr::filter(IDS_TYPES == "DMC" | IDS_TYPES == "DC")
+
+# Add in Chief's preference from ac_17 and rename pref vars
+CHIEF_DOM <- merge(CHIEF_DOM, select(ABD_VILL, IDV,  ac_17_project_preferences_1), by = "IDV") %>%
+  mutate(projetPref_chief = ac_17_project_preferences_1) %>%
+  mutate(coarsePref_chief = project_recode(projetPref_chief)) %>%
+  mutate(projetPref_pop   = av_14_bis_project_1) %>%
+  mutate(coarsePref_pop   = project_recode(projetPref_pop))%>%
+  mutate(WEIGHT           = PWEIGHT2)
+
+table(CHIEF_DOM$coarsePref_pop, CHIEF_DOM$coarsePref_chief)
+
+# 457 measures of chief preferences
+sum(table(CHIEF_DOM$coarsePref_chief[CHIEF_DOM$IDS_TYPES=="DC"]))
+
+
+# Add in actual project choice
+CHIEF_DOM <- merge(CHIEF_DOM, CHOICE_VILL, by = "IDV")
+
+# Generate correct measure for population
+CHIEF_DOM <- within(CHIEF_DOM, {
+                         Correct_B_coarse <- coarsePref_pop == coarseChoice_b
+                         Correct_D_coarse <- coarsePref_pop == coarseChoice_d
+                         Correct_B_projet <- projetPref_pop == projetChoice_b
+                         Correct_D_projet <- projetPref_pop == projetChoice_d
+                         CHIEF     <- IDS_TYPES == "DC" })
+
+
+
+# Sub in correct measure for chief
+CHIEF_DOM <- within(CHIEF_DOM, {
+  Correct_B_coarse[CHIEF] <- (coarsePref_chief == coarseChoice_b)[CHIEF]
+  Correct_D_coarse[CHIEF] <- (coarsePref_chief == coarseChoice_d)[CHIEF]
+  Correct_B_projet[CHIEF] <- (projetPref_chief == projetChoice_b)[CHIEF]
+  Correct_D_projet[CHIEF] <- (projetPref_chief == projetChoice_d)[CHIEF]  }
+  )
+  
+# Chief dominance
+coef(summary(lm(Correct_B_coarse~ CHIEF, data = CHIEF_DOM)))[2,]
+coef(summary(lm(Correct_D_coarse~ CHIEF, data = CHIEF_DOM)))[2,]
+coef(summary(lm(Correct_B_projet~ CHIEF, data = CHIEF_DOM)))[2,]
+coef(summary(lm(Correct_D_projet~ CHIEF, data = CHIEF_DOM)))[2,]
+
+CHIEF_DOM <- select(CHIEF_DOM,
+                    TUUNGANE,
+                    IRC_TUUNGANE,
+                    WEIGHT,
+                    LOTT_BIN,
+                    CHIEF,
+                    Correct_B_coarse,
+                    Correct_D_coarse,
+                    Correct_B_projet,
+                    Correct_D_projet,
+                    NOSCHOOLS,
+                    INHERITED,
+                    NOCOMMITTEE,
+                    PWEIGHT2,
+                    VILL_WEIGHT,
+                    IDV,
+                    IDS_CDCCODE)
+
+
+
+
+# print(head(CHIEF_DOM))

@@ -1,0 +1,110 @@
+
+################################################################
+## Project: PPP Schools Sindh, Pakistan (Blakeslee)
+## Purpose: Create village-specific mappings of benefit vars
+## Date: Mon May 22 17:01:20 2017 
+## Author: Clara Bicalho
+################################################################
+
+# load libraries ----------------------------------------------------------
+
+x <- c("ggmap", "rgdal", "rgeos", "maptools", "dplyr", "tidyr", "tmap", "geosphere", "readstata13", "gridExtra", "grid")
+lapply(x, function(x) {if (!require(x, character.only=T)){install.packages(x);require(x)}})
+
+# load data ---------------------------------------------------------------
+
+rm(list=ls())
+
+setwd("C:/Users/cbm343/Google Drive/Blakeslee/Paper_SchoolsPakistan")
+
+su <- read.dta13("data_for_generating_heat_maps.dta")
+su_2 <- read.csv("heat_mapping_data.csv")
+
+# merge and clean survey data ---------------------------------------------
+
+names(su_2)[1:3] <- c("villcode", "unique_hh_ID", "unique_child_ID")
+su <- full_join(su, su_2, by = intersect(names(su), names(su_2)))
+su <- su[!is.na(su$fix_lat_d),] 
+
+v1 <- which(su$fix_lon_d > 200 | su$fix_lon_d < 60) # some coordinate records are off (too large or too small)
+v2 <- which(su$fix_lon_m > 60)
+
+v3 <- which(su$fix_lon_d > 200)
+v4 <- which(su$fix_lon_m > 60)
+
+su <- su[-c(v1, v2, v3, v4),]
+
+# generate coordinates ----------------------------------------------------
+
+su <- su %>% mutate(lon = fix_lon_d + (fix_lon_m + (fix_lon_s/1000))/60)
+su <- su %>% mutate(lat = fix_lat_d + (fix_lat_m + (fix_lat_s/1000))/60)
+dat <- su # to preserve survey data more easily later
+
+coord <- dat[,c("lon","lat")]
+
+# subset data - non-missing gender values ---------------------------------
+
+dat <- dat %>% subset(!is.na(fu_female))
+dat$gender <- ifelse(dat$fu_female == 0, "male", "female")
+
+# aggregate benefit values to household and reshape -----------------------
+
+# create household-gender means for benefit vars
+dat <- dat %>% group_by(district_name, villcode, unique_hh_ID, lat, lon, gender) %>% summarize_at(vars(dplyr::contains("bnd")), function(x) mean(x, na.rm = T)) %>% ungroup()
+
+# create vector of variables to be reshaped 
+vars <- names(dat)[grepl("bnd", names(dat))]
+
+# reshape data to long
+dat <- dat %>% melt(id.vars = names(dat)[!names(dat) %in% vars])
+
+# create graphing function ------------------------------------------------
+
+plot_grid <- function(plot_vars){
+  
+  su <- su %>% subset(variable == plot_vars[1] | variable == plot_vars[2])
+  su$variable <- factor(su$variable, levels = c(plot_vars[1], plot_vars[2]))
+  
+  var_labeller <- c(
+    child_benefit_uprbnd_delta = "change in benefit (upper bound)",
+    child_benefit_lwrbnd_delta = "change in benefit (lower bound)",
+    sp_child_benefit_uprbnd = "optimal benefit (upper bound)",
+    sp_child_benefit_lwrbnd = "optimal benefit (lower bound)",
+    bl_child_benefit_uprbnd = "baseline benefit (upper bound)", 
+    bl_child_benefit_lwrbnd = "baseline benefit (lower bound)")
+  
+  map_coords <- c(mean(su$lon), mean(su$lat))
+  
+  map <- get_map(location = c(lon = map_coords[1], lat = map_coords[2]), maptype = "satellite", zoom = 17)
+  
+  vill <- ggmap(map) + geom_point(aes(x = lon, y = lat, color = value), size = 2, alpha = .5, data = su) +
+    geom_point(shape = 1, size = 12, colour = "black") +
+    scale_color_gradient(low="red", high="green") +
+    facet_wrap(gender ~ variable, labeller = labeller(variable = var_labeller)) +
+    labs(x = " ", y = " ", title = paste("Village ", unique(su$villcode))) +
+    guides(size = guide_legend(title="Benefit")) +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    theme(axis.ticks = element_blank(), axis.text.x = element_blank(), axis.text.y = element_blank()) + 
+    theme(panel.border = element_blank())
+  
+  return(vill)
+}
+
+# run a for loop and plot for each village  -------------------------------
+
+village <- unique(dat$villcode)
+
+for(i in seq_along(village)){
+  var1 <- "bl_child_benefit_lwrbnd" # first variable to be plotted
+  var2 <- "bl_child_benefit_uprbnd" # second variable to be plotted
+  su <- dat %>% subset(villcode == village[i]) # restrict data to village i
+  plot_grid(plot_vars = c(var1, var2)) # print plot
+  ggsave(paste0("draft_graphs/village maps/vill", village[i], "_hh_", var1,".pdf"), # export to this path
+         plot = last_plot(), device = "pdf", dpi = 300, width=11, height=8.5)
+}
+
+
+
+
+
+

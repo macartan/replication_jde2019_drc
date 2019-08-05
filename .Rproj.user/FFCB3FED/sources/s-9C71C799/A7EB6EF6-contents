@@ -1,0 +1,106 @@
+---
+title: "Master cleaning of Meta-Analysis data"
+author: "mk1"
+date: "3/17/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+pks <- c("readstata13","reshape","dotwhisker","plyr","dplyr","foreign",
+         "tidyverse","lfe","dplyr","stargazer", "knitr", "tidyr",
+         "haven","rstudioapi", "stringr", "ri", "car", "xtable", "xlsx", "rmarkdown", "magrittr")
+
+# Note xlsx requires a 64 bit Java install on PCs; see eg  https://java.com/en/download/win10.jsp
+
+lapply(pks, function(x) if (!require(x, character.only=T)){install.packages(x);library(x, character.only = T)})
+opts_knit$set(warning = FALSE, message = FALSE)
+
+```
+
+# Load all required raw data
+
+```{r, warning=FALSE}
+## mexico
+# load survey data
+  mexsurdat <- read.dta13("data/raw/mex/SURVEYedited.dta")
+
+# load municipality-level data 
+  mexanaldat <- read.dta13("data/raw/mex/ANALYSISedited.dta")
+
+# load flyer data
+  flyer <- read.xlsx2("data/raw/mex/flyer.xlsx", 1, stringsAsFactors=FALSE)
+  
+# load precinct data
+  mexprecdat <- read.dta13("data/raw/mex/ANALYSISedited.dta")
+
+## benin
+# load the survey data
+  # ben <- read.dta13("data/raw/ben/data_with_randblocks/benin_survey.dta")
+  ben <- read.dta13("data/raw/ben/data_with_randblocks/benin_survey_v2_201711213.dta")
+
+## uganda 1
+# load the survey data
+  ug1dat_ind <- read.dta13("data/raw/ug1/MTC_GE_individual_analysis.dta")
+  ug1dat <- read.dta13("data/raw/ug1/mtc_analysis_formetaketa.dta")
+
+## brazil
+# importing data that the team has already cleaned a lot
+  brz <- read_csv("data/raw/brz/panel_cleaned_20171213.csv")
+  
+## burkina faso
+# load analysis data (pre-cleaned for the most part)
+  bf <- read.csv2(file = "data/raw/bf/Burkina Faso Metaketa Individual Data 2017-10-09.csv", header = T)
+  
+## uganda 2  
+# load the near-raw dataset
+  ug2dat <- read.csv("data/raw/ug2/ANON_Budget_Replication_170207.csv")
+
+```
+
+# Run the three pieces of cleaning code
+
+```{r, child = '1a_prep_clean.Rmd'}
+  # Rmd cleaning most variables used in analysis
+```
+
+```{r, include=FALSE}
+  ben <- ben_pp
+  mexsur <- mexsur_pp
+  ug1 <- ug1_pp
+```
+
+```{r, include=FALSE}
+  # Rmd generating P, Q, N, and N_good variables for public private data sets
+  rmarkdown::render("1b_prep_PQ.Rmd")
+  
+  save(ben,    file = "data/temp/pubpvt/ben_pp_covinter_clean.Rda")
+  save(mexsur, file = "data/temp/pubpvt/mex_pp_covinter_clean.Rda")
+  save(ug1,    file = "data/temp/pubpvt/ug1_pp_covinter_clean.Rda")
+  
+  load("data/temp/ben_covinter_clean.Rda")
+  load("data/temp/mex_covinter_clean.Rda")
+  load("data/temp/ug1_covinter_clean.Rda")
+  load("data/temp/ug2_covinter_clean.Rda")
+  load("data/temp/brz_covinter_clean.Rda")
+  load("data/temp/bf_covinter_clean.Rda")
+```
+
+```{r, child = '1b_prep_PQ.Rmd'}
+  # Rmd generating P, Q, N, and N_good variables
+```
+
+```{r, child = '1c_prep_manipulation.Rmd'}
+  # Rmd generating `correct` variable for correct recollection of Q
+```
+
+# Save as `Rda` objects
+
+```{r}
+  save(mexsur, file = "data/temp/mex_covinter_clean.Rda")
+  save(ug1,    file = "data/temp/ug1_covinter_clean.Rda")
+  save(ug2,    file = "data/temp/ug2_covinter_clean.Rda")
+  save(bf,     file = "data/temp/bf_covinter_clean.Rda")
+  save(brz,    file = "data/temp/brz_covinter_clean.Rda")
+  save(ben,    file = "data/temp/ben_covinter_clean.Rda")
+```

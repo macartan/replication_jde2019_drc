@@ -1,0 +1,178 @@
+
+############################
+## EFFICIENCY
+############################
+
+
+###########
+#16 Existence and Quality of Accounting
+###########
+counter <- 16  # for trouble shooting
+
+D_AUDIT_ACCOUNT <- D_AUDIT
+D_AUDIT_ACCOUNT %<>%
+  dplyr::select(IDV,
+                TUUNGANE,
+                IRC_TUUNGANE,
+                da027_got_accounting_form,
+                da028_contrib,
+                da031_money_available_total,
+                da032_total_amount,
+                da033_justified,
+                da034_credibly_justified,
+                IDV_PROPENSITY_WEIGHT_ADJ,
+                VILL_WEIGHT,
+                PWEIGHT2,
+                NOSCHOOLS,
+                INHERITED,
+                NOCOMMITTEE,
+                LOTT_BIN)
+
+D_AUDIT_ACCOUNT[,c("da027_got_accounting_form",
+                   "da028_contrib",
+                   "da031_money_available_total",
+                   "da032_total_amount",
+                   "da033_justified",
+                   "da034_credibly_justified")] %<>%
+  apply(MARGIN = 2, FUN = function(x) ifelse(x == -9 | x == -8 | x == 7,
+                                             yes = NA, no = x))
+
+D_AUDIT_ACCOUNT %<>%
+  dplyr::mutate(ACCOUNTING_FORM = da027_got_accounting_form,
+                da028_contrib = ifelse(test = da028_contrib > 10000,
+                                       yes = da028_contrib/900,
+                                       no = da028_contrib),
+                da028_contrib = ifelse(test = da028_contrib < 0,
+                                       yes = NA,
+                                       no = da028_contrib),
+                da031_money_available_total =
+                  ifelse(test = !is.na(da028_contrib) & da028_contrib > 0,
+                         yes = da031_money_available_total - da028_contrib,
+                         no = da031_money_available_total),
+                ACCOUNTED_EVAL = (da031_money_available_total)/1000,
+                da032_total_amount =
+                  ifelse(test = !is.na(da028_contrib) & da028_contrib > 0,
+                         yes = da032_total_amount - da028_contrib,
+                         no = da032_total_amount),
+                ACCOUNTED_COMM = (da032_total_amount/1000)) %>%
+  dplyr::mutate(ACCOUNTED_EVAL = ifelse(test = ACCOUNTED_EVAL < 0 & !is.na(ACCOUNTED_EVAL),
+                                        yes = 0,
+                                        no = ACCOUNTED_EVAL),
+                ACCOUNTED_EVAL = ifelse(test = ACCOUNTED_EVAL > 1 & !is.na(ACCOUNTED_EVAL),
+                                        yes = 1,
+                                        no = ACCOUNTED_EVAL),
+                ACCOUNTED_COMM = ifelse(test = ACCOUNTED_COMM<0 & !is.na(ACCOUNTED_COMM),
+                                        yes = 0,
+                                        no = ACCOUNTED_COMM),
+                ACCOUNTED_COMM = ifelse(test = ACCOUNTED_COMM > 1 & !is.na(ACCOUNTED_COMM),
+                                        yes = 1,
+                                        no = ACCOUNTED_COMM),
+                PART_JUSTIFIED = (da033_justified/1000),
+                PART_CREDIBLY_JUSTIFIED = (da034_credibly_justified/1000),
+                WEIGHT = IDV_PROPENSITY_WEIGHT_ADJ,
+                ACCOUNTING_FORM = ACCOUNTING_FORM * 100,
+                ACCOUNTED_EVAL = ACCOUNTED_EVAL * 100,
+                ACCOUNTED_COMM = ACCOUNTED_COMM * 100,
+                PART_CREDIBLY_JUSTIFIED = PART_CREDIBLY_JUSTIFIED * 100,
+                WEIGHT = IDV_PROPENSITY_WEIGHT_ADJ)
+
+D_AUDIT_ACCOUNT$MFI_ACCOUNTING <-
+  D_AUDIT_ACCOUNT %>%
+  data.frame %>%
+  wmeaneffects(.data = .,
+               .treat = "TUUNGANE",
+               .weight = "WEIGHT",
+               .outcomes = c("ACCOUNTING_FORM",
+                             "ACCOUNTED_EVAL",
+                             "ACCOUNTED_COMM",
+                             "PART_JUSTIFIED",
+                             "PART_CREDIBLY_JUSTIFIED"),
+               .cond = "!is.na(TUUNGANE)",
+               .varname = "MFI_ACCOUNTING") %>%
+  unlist %>%
+  as.vector
+
+
+###########
+#17 Information Transmission
+###########
+counter <- 17  # for trouble shooting
+
+ABD_INDIV_HEALTH <- ABD_INDIV
+ABD_INDIV_HEALTH %<>%
+  dplyr::filter(!(IDS_TYPES == "DC" | IDS_TYPES == "DCDV") &
+                  (!is.na(qs001_infant_deaths) | !is.na(qs002_wash_hands)
+                   | !is.na(qs003_ash) | !is.na(qs004_when_wash_hands)
+                   | !is.na(qs005_public_diarhea) | !is.na(qs006_malaria_deaths)
+                   | !is.na(qs007_malaria_vector) | !is.na(qs008_malaria_groups)
+                   | !is.na(qs009_malaria_prevention) | !is.na(qs010_malaria_symptons)
+                   | !is.na(qs011_malaria_action)))
+
+ABD_INDIV_HEALTH[,c("qs001_infant_deaths",
+                    "qs002_wash_hands",
+                    "qs003_ash",
+                    "qs005_public_diarhea",
+                    "qs006_malaria_deaths",
+                    "qs007_malaria_vector",
+                    "qs004_when_wash_hands",
+                    "qs008_malaria_groups",
+                    "qs009_malaria_prevention",
+                    "qs010_malaria_symptons",
+                    "qs011_malaria_action")] %<>%
+  apply(MARGIN = 2, FUN = function(x) ifelse(x == -9 | x == -8 | x == -7,
+                                             yes = NA, no = x))
+
+ABD_INDIV_HEALTH %<>%
+  rowwise() %>%
+  dplyr::summarize(SUM_HEALTH_INFO = sum(qs001_infant_deaths,
+                                         qs002_wash_hands,
+                                         qs003_ash,
+                                         qs004_when_wash_hands,
+                                         qs005_public_diarhea,
+                                         na.rm = TRUE),
+                   SUM_MALARIA_INFO = sum(qs006_malaria_deaths,
+                                          qs007_malaria_vector,
+                                          qs008_malaria_groups,
+                                          qs009_malaria_prevention,
+                                          qs010_malaria_symptons,
+                                          qs011_malaria_action,
+                                          na.rm = TRUE)) %>%
+  ungroup() %>%
+  bind_cols(ABD_INDIV_HEALTH) %>%
+  dplyr::mutate(DML = ifelse(IDS_TYPES == "DML",
+                             yes = 1,
+                             no = 0),
+                RAPIDxTUUNGANE = IDS_RAPID * TUUNGANE,
+                SUM_HEALTH_INFO = (SUM_HEALTH_INFO * 100/9),
+                SUM_MALARIA_INFO = (SUM_MALARIA_INFO/14),
+                WEIGHT = IDS_HH_SAMP_PROP_W_DML,
+                LOTT_BIN=LOTT_BIN,
+                NOSCHOOLS = NOSCHOOLS,
+                INHERITED = INHERITED,
+                NOCOMMITTEE = NOCOMMITTEE,
+                PWEIGHT2=PWEIGHT2,
+                VILL_WEIGHT=VILL_WEIGHT)
+
+# ABD_INDIV$SUM_HEALTH_INFO
+
+ABD_INDIV_HEALTH %<>%
+  dplyr::filter(DML == 1)
+
+ABD_INDIV_HEALTH <- dplyr::select(
+              ABD_INDIV_HEALTH,
+              RAPIDxTUUNGANE,
+              IDS_RAPID,
+              TUUNGANE,
+              IRC_TUUNGANE,
+              SUM_HEALTH_INFO,
+              SUM_MALARIA_INFO,
+              WEIGHT,
+              LOTT_BIN,
+              NOSCHOOLS,
+              INHERITED,
+              NOCOMMITTEE,
+              PWEIGHT2,
+              VILL_WEIGHT,
+              IDV,
+              IDS_CDCCODE)
+

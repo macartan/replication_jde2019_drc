@@ -1,0 +1,274 @@
+
+
+# get data
+gps     <- read.dta("Data/gps/gps_tuungane.dta")[,-3]
+cdcdata <- read.dta("Data/gps/IDV_WEIGHTS_201203.dta")
+cdcdata$LOTT_BIN <- unclass(factor(cdcdata$LOTT_BIN))
+
+# extract adjacency matrix. Note that this is 1020 * 1020: there are 100 obs with no geo data
+adj <- gps[,5:ncol(gps)]
+dim(adj)
+
+# Add in treatment data
+gps <- merge(gps, cdcdata, by.x = "IDV", by.y = "IDV")
+
+# adjacency matrix for same CDC
+same_cdc <- sapply(gps$CDCCODE, function(i) gps$CDCCODE==i)
+
+# function to assess how many treated villages from outside CDC within distance X?
+indirect = function(d = 5, adjac = adj, treated = gps$TUUNGANE, binary = TRUE){
+  close <- (adjac <= d) & !same_cdc 
+  out <- treated %*% close
+  if(binary) out <- 1*(out > 1)
+  return(as.numeric(out))
+    }
+
+# Rerandomize -- same # treated CDC in lottbin (ie conditional on geographic data availability)
+cdc_level_data <- aggregate(x = gps[c("TUUNGANE", "CDCCODE", "LOTT_BIN")], by = list(gps$CDCCODE), FUN = "mean")
+resample       <- function() ave(cdc_level_data$TUUNGANE, cdc_level_data$LOTT_BIN, FUN = function(x)  sample(x))
+rerand         <- function(){
+                  resampled <- cdc_level_data$CDCCODE[resample()==1]
+                  as.vector(gps$CDCCODE %in% resampled)
+                }
+
+# Save in indirect measures
+gps$indirect05  <- 1*indirect(d=5)
+gps$indirect20 <- 1*indirect(d=20)
+
+# Now get matrices of re-randomized exposure within some distance like this:
+dir    <- replicate(spilloversims, rerand())
+ind05  <- sapply(1:spilloversims, function(j) indirect(d = 5, treated = dir[,j]))
+ind20  <- sapply(1:spilloversims, function(j) indirect(d = 20, treated = dir[,j]))
+
+# Back out probabilities and weights
+
+gps$pDI_05  <-  apply(dir     * ind05,     1, mean)
+gps$pD0_05  <- apply(dir     * (1-ind05), 1, mean)
+gps$p0I_05  <-  apply((1-dir) * ind05,     1, mean)
+gps$p00_05  <- apply((1-dir) * (1-ind05), 1, mean)
+
+gps %<>%     dplyr::mutate(
+  wDI_05  = 1/pDI_05,
+  wD0_05  = 1/pD0_05,
+  w0I_05  = 1/p0I_05,
+  w00_05  = 1/p00_05
+    )
+
+gps$pDI_20  <-  apply(dir     * ind20,     1, mean)
+gps$pD0_20  <- apply(dir     * (1-ind20), 1, mean)
+gps$p0I_20  <-  apply((1-dir) * ind20,     1, mean)
+gps$p00_20  <- apply((1-dir) * (1-ind20), 1, mean)
+
+gps %<>%     dplyr::mutate(
+  wDI_20  = 1/pDI_20,
+  wD0_20  = 1/pD0_20,
+  w0I_20  = 1/p0I_20,
+  w00_20  = 1/p00_20
+  )
+
+# For full analysis there should only be cases that have a 0<p<1  probability of being in all conditions
+gps %<>%     dplyr::mutate( 
+  exclude05 = (pDI_05 ==1 | pDI_05 ==0) | (pD0_05 ==1 | pD0_05 ==0) | (p0I_05 ==1 | p0I_05 ==0) |(p00_05 ==1 | p00_05 ==0),
+  exclude20 = (pDI_20 ==1 | pDI_20 ==0) | (pD0_20 ==1 | pD0_20 ==0) | (p0I_20 ==1 | p0I_20 ==0) |(p00_20 ==1 | p00_20 ==0)
+)
+table(gps$exclude05, gps$exclude20)
+  
+# set weights to NA for excluded cases
+# set weights to NA for excluded cases
+gps$wDI_05[gps$exclude05] <- NA; gps$w0I_05[gps$exclude05] <- NA; gps$wD0_05[gps$exclude05] <- NA; gps$w00_05[gps$exclude05] <- NA
+gps$wDI_20[gps$exclude20] <- NA; gps$w0I_20[gps$exclude20] <- NA; gps$wD0_20[gps$exclude20] <- NA; gps$w00_20[gps$exclude20] <- NA
+
+
+# A general function to figure weights -- needed for RI 
+# Cases will be dropped if weight = Inf or weight = 1
+# cap of weight = 20 placed on weights
+gen_weight05 = function(D, I, data = gps, cap = 20){
+  w  <- rep(NA, nrow(data))
+  w[D ==1 & I ==1] <- data$wDI_05[D ==1 & I ==1]
+  w[D ==0 & I ==1] <- data$w0I_05[D ==0 & I ==1]
+  w[D ==1 & I ==0] <- data$wD0_05[D ==1 & I ==0]
+  w[D ==0 & I ==0] <- data$w00_05[D ==0 & I ==0]
+  w[w == Inf] <- NA
+  w[w == 1]   <- NA
+  w[w > cap] <- cap
+  return(w)
+}
+
+gen_weight20 = function(D, I, data = gps, cap = 20){
+  w  <- rep(NA, nrow(data))
+  w[D ==1 & I ==1] <- data$wDI_20[D ==1 & I ==1]
+  w[D ==0 & I ==1] <- data$w0I_20[D ==0 & I ==1]
+  w[D ==1 & I ==0] <- data$wD0_20[D ==1 & I ==0]
+  w[D ==0 & I ==0] <- data$w00_20[D ==0 & I ==0]
+  w[w == Inf] <- NA
+  w[w == 1]   <- NA
+  w[w > cap] <- cap
+  return(w)
+}
+
+gps$gps_weight05 <- gen_weight05(D=gps$TUUNGANE, I=gps$indirect05, data = gps)
+gps$gps_weight20 <- gen_weight20(D=gps$TUUNGANE, I=gps$indirect20, data = gps)
+
+par(mfrow = c(2,2))
+hist(gps$gps_weight05)
+hist(gps$gps_weight20)
+# check
+# pDI_05+p0I_05+pD0_05+p00_05
+
+#############################################################################################################################
+# Basic analysis with ri p value for sharp null
+# or this analysis we run regression with block fixed effects
+# Implemented on village level data
+gps.analysis = function(Y, DIR = gps$TUUNGANE, IND = gps$indirect05, weight = gps$gps_weight05, coef = FALSE, blocks = gps$LOTT_BIN){
+  .dir <- DIR - mean(DIR, na.rm = TRUE)   
+  .ind <- IND - mean(IND, na.rm = TRUE)   
+  .int <- .dir*.ind
+  if(is.null(blocks))  M   <- summary(lm(Y ~ .dir + .ind + .int, weight = weight))
+  if(!is.null(blocks)) M   <- summary(lm(Y ~ .dir + .ind + .int + as.factor(blocks), weight = weight))
+  if(coef)  out <- list(coef(M)[2:3, 1:2], mean(M$residuals^2),  length(M$residuals))
+  if(!coef) out <- mean(M$residuals^2)    # MSE CALCULATION
+  return(out)
+  }
+
+# Gets MSE from run using simulated treatments i; assuming weight generation function f_w
+# (f_w  needed because with IPW. the weights depends on the particular allocation)
+# Model has block fixed effects
+test.stats  <- function(i, Y, directs=dir, indirects=ind05, blocks = gps$LOTT_BIN, f_w = gen_weight05){
+  diri <- directs[,i]
+  indi <- indirects[,i]
+  wi   <- f_w(diri, indi)
+  gps.analysis(Y, DIR = diri, IND = indi, weight = wi, blocks = blocks, coef = FALSE)
+  }
+
+
+# True analysis: Default values set for the 5km analysis
+ri.analysis = function(Y, 
+                       DIR = gps$TUUNGANE,   
+                       directs=dir,     
+                       blocks = gps$LOTT_BIN,
+                       IND = gps$indirect05, 
+                       indirects=ind05, 
+                       weight = gps$gps_weight05, 
+                       f_w = gen_weight05, 
+                       spilloversims = 10){
+  real          <- gps.analysis(Y, DIR = DIR, IND = IND, weight = weight, coef = TRUE, blocks = blocks)
+  tstats05      <- sapply(1:spilloversims, function(i) test.stats(i = i, 
+                                Y = Y, directs = directs, indirects = indirects, blocks = blocks, f_w = f_w))
+  out <- cbind(t(real[[1]]), c(real[[2]], "MSE(p)"=mean(tstats05 <= real[[2]])))
+  colnames(out) <- c("Direct", "Indirect", "MSE (p)")
+  return(out)
+  }
+
+
+ri.analysis = function(Y, 
+                       DIR = gps$TUUNGANE,   
+                       directs=dir,     
+                       blocks = gps$LOTT_BIN,
+                       IND = gps$indirect05, 
+                       indirects=ind05, 
+                       weight = gps$gps_weight05, 
+                       f_w = gen_weight05, 
+                       spilloversims = 10){
+  real          <- gps.analysis(Y, DIR = DIR, IND = IND, weight = weight, coef = TRUE, blocks = blocks)
+  tstats05      <- sapply(1:spilloversims, function(i) test.stats(i = i, 
+                                                         Y = Y, directs = directs, indirects = indirects, blocks = blocks, f_w = f_w))
+  out <- c(real[[1]][1,], real[[1]][2,], real[[2]], "MSE(p)"=mean(tstats05 <= real[[2]]), real[[3]])
+  names(out) <- c("d", "se_d", "in", "se_in", "MSE", "p", "N")
+  return(out)
+}
+
+
+# Illustration 
+# Note this produces marginal effects at mean, so here no 0 coefficents on main effects
+# Y = 1*(gps$indirect05)*(gps$TUUNGANE) + rnorm(nrow(gps))
+# gps.analysis(Y, coef = TRUE)
+# test.stats(i = 2, Y = Y)
+# ri.analysis(Y)
+# ri.analysis(Y, IND = gps$indirect20, indirects=ind20, weight = gps$gps_weight20, f_w = gen_weight20)
+
+# Check: distribution of p values should be flat under the null
+# dumps <- replicate(spilloversims_check, ri.analysis(rnorm(nrow(gps)))[2,3])
+#pdf("temp_ri_check.pdf")
+# hist(dumps)
+#dev.off()
+
+# Run on village level data
+# Generate village level data
+villmeans2 <- villmeans[,c(1, 8:23)]
+gpsvars    <- names(villmeans2)[-1] 
+gps <- merge(gps, villmeans2, by.x = "IDV", by.y = "IDV", all.x = TRUE)
+
+# Verify code ok
+gps.analysis(gps$da109_not_verifiable, coef = TRUE)
+with(gps, {ri.analysis(da109_not_verifiable, IND = indirect05, indirects=ind05, weight = gps_weight05, f_w = gen_weight05)})
+
+# ri.analysis(gps$da109_verifiable, IND = gps$indirect20, indirects=ind20, weight = gps$gps_weight20, f_w = gen_weight20)
+analysis05 <- sapply(gpsvars, function(j) ri.analysis(gps[j][[1]], IND = gps$indirect05, indirects=ind05, weight = gps$gps_weight05, f_w = gen_weight05, spilloversims = spilloversims))
+analysis05
+CONTENT05 <- round(t(analysis05),2)
+
+analysis20 <- sapply(gpsvars, function(j) ri.analysis(gps[j][[1]], IND = gps$indirect20, indirects=ind20, weight = gps$gps_weight20, f_w = gen_weight20, spilloversims = spilloversims))
+analysis20
+CONTENT20 <- round(t(analysis20),2)
+
+T_spill05 <- rbind(
+  "\\centering",
+  "\\scriptsize",
+  "\\begin{tabular}{l|ccccccc}",
+  "	& Direct      &   (se) &  Indirect &(se)  &  MSE & ($p$) & N    \\\\ \\hline \\hline",
+  "\\mc{7}{l}{\\textbf{Spillovers at 5km}} \\\\ \\hline",
+  mat_to_tex(CONTENT05 [1:5,], rownames = varnames[1:5]),
+  "\\hline \\mc{6}{l}{\\textbf{Participation}} \\\\ \\hline",
+  mat_to_tex(CONTENT05 [6:10,], rownames = varnames[6:10]),
+  "\\hline \\mc{6}{l}{\\textbf{Accountability}} \\\\ \\hline",
+  mat_to_tex(CONTENT05 [11:12,], rownames = varnames[11:12]),
+  "\\hline \\mc{6}{l}{\\textbf{Transparency}} \\\\ \\hline",
+  mat_to_tex(CONTENT05 [13:14,], rownames = varnames[13:14]),
+  "\\hline \\mc{6}{l}{\\textbf{Efficiency}} \\\\ \\hline",
+  mat_to_tex(CONTENT05 [15:16,], rownames = varnames[15:16]),
+  "\\hline \\hline \\mc{8}{l}{\\parbox{5.2in} {\\scriptsize \\singlespace \\textit{Notes:} 
+  Spillover effects estimated using a regression model of the form $Y = \\alpha Direct + \\beta Indirect + \\gamma Direct \\times
+  Indirect$ where both the  direct and indirect maesures are normalized to have zero means. Average
+  direct and indirect effects are then given by $\\alpha$ and $\\beta$. 
+  MSE is used as a test statistic for the randomization infernence and the $p$ value reports the probability of such a low MSE under the sharp null of no effects. 
+  
+  }}", 
+  "\\label{table_spillovers05}",
+  "\\end{tabular}"
+)
+
+sink("Output/T_spill05.tex")
+tablr(T_spill05)
+sink()
+
+
+
+T_spill20 <- rbind(
+  "\\centering",
+  "\\scriptsize",
+  "\\begin{tabular}{l|ccccccc}",
+  "	& Direct      &   (se) &  Indirect & (se)  &  MSE & ($p$) & N   \\\\ \\hline \\hline",
+  "\\mc{7}{l}{\\textbf{Spillovers at 20km}} \\\\ \\hline",
+  mat_to_tex(CONTENT20 [1:5,], rownames = varnames[1:5]),
+  "\\hline \\mc{6}{l}{\\textbf{Participation}} \\\\ \\hline",
+  mat_to_tex(CONTENT20 [6:10,], rownames = varnames[6:10]),
+  "\\hline \\mc{6}{l}{\\textbf{Accountability}} \\\\ \\hline",
+  mat_to_tex(CONTENT20 [11:12,], rownames = varnames[11:12]),
+  "\\hline \\mc{6}{l}{\\textbf{Transparency}} \\\\ \\hline",
+  mat_to_tex(CONTENT20 [13:14,], rownames = varnames[13:14]),
+  "\\hline \\mc{6}{l}{\\textbf{Efficiency}} \\\\ \\hline",
+  mat_to_tex(CONTENT20 [15:16,], rownames = varnames[15:16]),
+  "\\hline \\hline \\mc{8}{l}{\\parbox{5.2in} {\\scriptsize \\singlespace \\textit{Notes:} 
+  Spillover effects estimated using a regression model of the form $Y = \\alpha Direct + \\beta Indirect + \\gamma Direct \\times
+Indirect$ where both the  direct and indirect maesures are normalized to have zero means. Average
+direct and indirect effects are then given by $\\alpha$ and $\\beta$. 
+  MSE is used as a test statistic for the randomization infernence and the $p$ value reports the probability of such a low MSE under the sharp null of no effects. 
+  
+  }}", 
+  "\\label{table_spillovers20}",
+  "\\end{tabular}"
+)
+
+sink("Output/T_spill20.tex")
+  tablr(T_spill20)
+sink()
