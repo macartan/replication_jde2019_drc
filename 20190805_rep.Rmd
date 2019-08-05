@@ -231,8 +231,6 @@ main_results <- list(
                            weights  = VILL_WEIGHT, 
                            clusters = IDS_CDCCODE),
   
-#  embezzl_list = lm_robust(as.formula("qr2729_list_experiment  ~ TUUNGANE + RA + RA*TUUNGANE + as.factor(LOTT_BIN)"), 
-
   embezzl_list = lm_robust(
     qr2830_list_experiment ~ TUUNGANE + RB + RB*TUUNGANE + as.factor(LOTT_BIN),                 
                            data     = ind,
@@ -291,7 +289,6 @@ add_cols <- mapply(function(d, dv){
   #weighted average of block averages
   w_ave_ctrl_blocks <- weighted.mean(ave_ctrl_blocks$ave, ave_ctrl_blocks$block_w, na.rm = TRUE)
   #weighted sd of block averages
-  #w_sd_ctrl_blocks <- sqrt(sum(block_w * (ave_ctrl_blocks$ave - w_ave_ctrl_blocks)^2, na.rm = TRUE))
   w_sd_ctrl_blocks <- sd(d$dv, na.rm = TRUE)
   
   return(round(rbind(w_ave_ctrl_blocks, w_sd_ctrl_blocks, N_cluster), 3))
@@ -1074,6 +1071,9 @@ if(saving){
 This figure requires aceess to GPS data and is only generated if `with_GPS = TRUE`.
 
 ```{r, eval = with_GPS}
+
+if(with_GPS){
+  
 gps2 <- GPS
 gps2 <- left_join(gps2, vill[,c("IDV", "IDV_RAPID")])
 
@@ -1101,10 +1101,6 @@ map_tuungane <- function(){
          pt.bg = alpha(c("black","black","white","white"), .6), bty = "n",
          cex = .6, pt.cex = .8, text.width = 1.5, y.intersp = 1, x.intersp = .8, 
          inset=0.05)
-  # legend(29.6, -10, legend = c("Rapid", "Control"),
-  #        pch = c(24, 24), bty = "n",
-  #        cex = .8, pt.cex = 1.2, text.width = 1.5, y.intersp = 1, x.intersp = .8, 
-  #        inset=0.05)
 }
 
 map_tuungane()
@@ -1115,7 +1111,7 @@ if(saving){
   map_tuungane()
   dev.off()
 }
-
+}
 ```
 
 # Figure 2: Timeline
@@ -1282,6 +1278,8 @@ This figure requires access to GPS data and is only generated if `with_GPS = TRU
 
 ```{r, include = TRUE, eval=with_GPS}
 
+if(with_GPS){
+
 # This defines a "translucent white" and a  "translucent black"
 colors = c(rgb(1,1,1,.8), rgb(0,0,0,.8))
 
@@ -1339,15 +1337,16 @@ fig_spillovers <- function(){
   text(26.9,-12.2, "50 KM", pos=4)
   box()
 }
+}
 ```
 
 ```{r, eval=with_GPS}
-
+if(with_GPS){
 if(saving){
   pdf(file=paste0(output_folder, "/Fig4_Spillovers.pdf"), width=12, height=4) 
   fig_spillovers()
   dev.off()
-}
+}}
 
 ```
 
@@ -1444,7 +1443,7 @@ We explore the number of LLUs visited and surveys conducted during Steps A and D
 
 ## Step A Information
 
-We consider a village as visited if anything was collected during Step A in that village. That is anything from (variable used): Step A enumerator survey (a_3_date_village_entry), Step A chief survey (ac_3_date), Step A village meeting survey (am_3_ag_date), or at least one of Step A's household surveys (av_10_gender).
+We consider a village as visited if any data was collected during Step A in that village. That is anything from (variable used): Step A enumerator survey (a_3_date_village_entry), Step A chief survey (ac_3_date), Step A village meeting survey (am_3_ag_date), or at least one of Step A's household surveys (av_10_gender).
 
 ```{r}
 
@@ -1484,7 +1483,7 @@ stepA_HHs_Control
 
 ## Step B Information
 
-We consider a village as visited if anything was collected during Step B in that village. 
+We consider a village as visited if any data was collected during Step B in that village. 
 
 ```{r, warning=FALSE}
 
@@ -1505,7 +1504,7 @@ stepB_Control
 
 ## Step D Information
 
-We consider a village as visited if anything was collected during Step D in that village. That is anything from (variable used): the Step D chief survey (cq007_date), or at least one of Step D's household surveys (q000_consent_beg).
+We consider a village as visited if any data was collected during Step D in that village. That is anything from (variable used): the Step D chief survey (cq007_date), or at least one of Step D's household surveys (q000_consent_beg).
 
 ```{r}
 
