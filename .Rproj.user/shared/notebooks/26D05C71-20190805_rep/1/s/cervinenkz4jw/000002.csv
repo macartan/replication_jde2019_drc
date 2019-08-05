@@ -1,0 +1,6 @@
+"0",""
+"0","source(""Code/2.1 PrepSpillovers_village_data.R"")"
+"0",""
+"0","if(with_GPS)   source(""Code/2.2 PrepSpillovers_rerandomize.R"")"
+"0","if(!with_GPS)  source(""Code/2.3 PrepSpillovers_import.R"")"
+"0",""

@@ -17,9 +17,9 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 
 This file replicates the core analysis as well as additional results of [Humphreys, M., de la Sierra, R. S., & Van der Windt, P. (2019). Exporting democratic practices: Evidence from a village governance intervention in Eastern Congo. _Journal of Development Economics_](https://www.sciencedirect.com/science/article/pii/S0304387818305078). 
 
-Data for this analysis is [available on Dataverse](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BSASJR) and can be sourced directly from the Dataverse server with the option below (`local_data <- FALSE`) or locally from folder "Data". 
+* Data for this analysis is [available on Dataverse](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BSASJR) and can be sourced directly from the Dataverse server with the option below (`local_data <- FALSE`) or locally from folder "Data". 
 
-Supporting code can be found in folder "Code". The code outputs tables and figures into the folder "Output", which are then sourced in from the LaTeX file of the manuscript.
+* Supporting code including this page is [available on Github](https://github.com/macartan/replication_jde2019_drc). The code outputs tables and figures into the folder "Output", which are then sourced in from the LaTeX file of the manuscript.
 
 ```{r pacs, include = FALSE}
 set.seed(1)
@@ -48,7 +48,7 @@ panderOptions("table.caption.prefix","")
 
 ## Options
 
-Options can be set to use data from data folder or directly from dataverse.
+Options can be set to use data from data folder or directly from dataverse. Note that if you ar e using this from public repositories then you have access to all code and almost all data but you do not have access to fine grained GPS data and so `with_GPS` should be set to `FALSE`. All analysis will still run although (a) spillover analysis will be implemented using summary data without GPS codes  (b) maps will not be produced.
 
 ```{r youropts}
 
@@ -1120,7 +1120,7 @@ if(saving){
 
 # Figure 2: Timeline
 
-```{r, include = TRUE}
+```{r, include = TRUE, fig.height=12, fig.width=12}
 
 DIS = unique(D$DISTRICT)
 DISTRICT=D$DISTRICT

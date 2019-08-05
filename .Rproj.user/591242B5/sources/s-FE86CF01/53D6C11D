@@ -2,18 +2,19 @@
     "collab_server" : "",
     "contents" : "",
     "created" : 1565002137196.000,
-    "dirty" : false,
+    "dirty" : true,
     "encoding" : "UTF-8",
     "folds" : "",
-    "hash" : "3979528573",
+    "hash" : "0",
     "id" : "53D6C11D",
-    "lastKnownWriteTime" : 1565006787,
-    "last_content_update" : 1565006787081,
+    "lastKnownWriteTime" : 1565012771,
+    "last_content_update" : 1565012930994,
     "path" : "C:/Dropbox/github/replication_jde2019_drc/20190805_rep.Rmd",
     "project_path" : "20190805_rep.Rmd",
     "properties" : {
-        "cursorPosition" : "6,0",
-        "scrollLine" : "0"
+        "cursorPosition" : "1486,44",
+        "last_setup_crc32" : "FE86CF0131cad069",
+        "scrollLine" : "1482"
     },
     "read_only" : false,
     "read_only_alternatives" : [

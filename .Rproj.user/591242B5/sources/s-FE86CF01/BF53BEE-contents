@@ -82,5 +82,6 @@ w20  <- sapply(1:spilloversims, function(j) gen_weight20(D=dir[,j], I=ind20[,j],
 gps <- select(gps, -starts_with("dist_")) %>% select(-c("latitude", "longitude"))
 
 
-if(save_geodeidentified_data) write_rds(list(gps = gps, dir = dir, ind05 = ind05, ind20 = ind20, w05 = w05, w20 = w20), "Data/gps_masked/spillover_data.rds")
+if(save_geodeidentified_data) write_rds(list(dir = dir, ind05 = ind05, w05 = w05), "Data/gps_masked/spillover_data_1.rds")
+if(save_geodeidentified_data) write_rds(list(gps = gps, ind20 = ind20, w20 = w20), "Data/gps_masked/spillover_data_2.rds")
 
