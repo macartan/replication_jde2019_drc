@@ -1353,9 +1353,9 @@ if(saving){
 # Figure 6: Minimal Detectable Effects
 
 ```{r, echo=FALSE}
-saveRDS(vill, "Data/vill.RDS")
+# saveRDS(vill, "Data/vill.RDS")
 set.seed(1)
-vill <- readRDS(file = "Data/vill.RDS")
+# vill <- readRDS(file = "Data/vill.RDS")
 ```
 
 Below we calculate power under different absolute value of ATE for financial irregularities based on a simulation approach using the package `DeclareDesign`. We formally declare our data structure, our potential outcomes, assignment scheme, our estimand and estimators.
