@@ -1,71 +1,57 @@
-Exporting Democratic Practices: Evidence from a Village Governance
-Intervention in East Congo
-================
-Macartan Humphreys, Raul Sanchez de la Sierra, Peter van der Windt
-05 August, 2019
+---
+title: 'Exporting Democratic Practices:  Evidence from a Village Governance Intervention in East Congo'
+author: "Macartan Humphreys, Raul Sanchez de la Sierra, Peter van der Windt"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  rmarkdown::github_document:
+    toc: TRUE
+    toc_depth: 2
+    html_preview: TRUE
+---
 
-  - [Preliminaries](#preliminaries)
-      - [Options](#options)
-      - [Definitions](#definitions)
-      - [Run Helper Code](#run-helper-code)
-      - [Get Data](#get-data)
-      - [Prepare Dataset and Variables](#prepare-dataset-and-variables)
-  - [Table 2: Results on Public Fund
-    Allocation](#table-2-results-on-public-fund-allocation)
-  - [Table 3: Results on Democratic
-    Practices](#table-3-results-on-democratic-practices)
-  - [Table 4: Tuungane Balance Table](#table-4-tuungane-balance-table)
-      - [Table 4b: RAPID Balance Table
-        (Supplementary)](#table-4b-rapid-balance-table-supplementary)
-  - [Table 5: Summary Statistics](#table-5-summary-statistics)
-  - [Tables 6 and 7: Spillovers](#tables-6-and-7-spillovers)
-  - [Table 8: Social Desirability](#table-8-social-desirability)
-  - [Table 9: Robustness](#table-9-robustness)
-  - [Table 10: Heterogeneous Effects by Initial
-    Institutions](#table-10-heterogeneous-effects-by-initial-institutions)
-  - [Figure 1: Map Tuungane Treatment and
-    Control](#figure-1-map-tuungane-treatment-and-control)
-  - [Figure 2: Timeline](#figure-2-timeline)
-  - [Figure 3: Main Results](#figure-3-main-results)
-  - [Figure 4: Spillovers](#figure-4-spillovers)
-  - [Figure 6: Minimal Detectable
-    Effects](#figure-6-minimal-detectable-effects)
-  - [Figure 5: Information for Consort
-    Chart](#figure-5-information-for-consort-chart)
-      - [Step A Information](#step-a-information)
-      - [Step B Information](#step-b-information)
-      - [Step D Information](#step-d-information)
-  - [Additional statistics](#additional-statistics)
+```{r setup, include=FALSE}
+rm(list=ls(all=TRUE)) 
+gc()
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
 
-This file replicates the core analysis as well as additional results of
-[Humphreys, M., de la Sierra, R. S., & Van der Windt, P. (2019).
-Exporting democratic practices: Evidence from a village governance
-intervention in Eastern Congo. *Journal of Development
-Economics*](https://www.sciencedirect.com/science/article/pii/S0304387818305078).
+This file replicates the core analysis as well as additional results of [Humphreys, M., de la Sierra, R. S., & Van der Windt, P. (2019). Exporting democratic practices: Evidence from a village governance intervention in Eastern Congo. _Journal of Development Economics_](https://www.sciencedirect.com/science/article/pii/S0304387818305078). 
 
-  - Data for this analysis is [available on
-    Dataverse](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BSASJR)
-    and can be sourced directly from the Dataverse server with the
-    option below (`local_data <- FALSE`) or locally from folder “Data”.
+* Data for this analysis is [available on Dataverse](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/BSASJR) and can be sourced directly from the Dataverse server with the option below (`local_data <- FALSE`) or locally from folder "Data". 
 
-  - Supporting code including this page is [available on
-    Github](https://github.com/macartan/replication_jde2019_drc). The
-    code outputs tables and figures into the folder “Output”, which are
-    then sourced in from the LaTeX file of the manuscript.
+* Supporting code including this page is [available on Github](https://github.com/macartan/replication_jde2019_drc). The code outputs tables and figures into the folder "Output", which are then sourced in from the LaTeX file of the manuscript.
+
+```{r pacs, include = FALSE}
+set.seed(1)
+# Install packages
+
+# Possibly necessary installations (if sourcing data from Dataverse):
+# devtools::install_github("iqss/dataverse-client-r")
+# install.packages("DeclareDesign", dependencies = TRUE,
+# repos = c("http://R.declaredesign.org", "https://cloud.r-project.org"))
+
+# Load (and install when necessary) packages
+
+library("pacman")
+pacman::p_load(rgdal,raster,plyr,AER,devtools,doBy,dplyr,energy,entropy,foreign,gdata,ggplot2,ggthemes,grid,gridExtra,haven,ivpack,lmtest,magrittr,maps,maptools,mosaic,multiwayvcov,pander,parallel,plm,R.matlab,reshape2,sandwich,SDMTools,spdep,stargazer,tidyr,xtable,SDMTools, estimatr, knitr,readstata13, rio, DeclareDesign, rmarkdown, tidyverse, readr)
+
+# Options
+options(xtable.comment = FALSE)
+panderOptions("table.style", "rmarkdown")
+panderOptions("digits",  4)
+panderOptions("table.split.table", 140)
+panderOptions("table.caption.prefix","")
+
+```
 
 # Preliminaries
 
 ## Options
 
-Options can be set to use data from data folder or directly from
-dataverse. Note that if you ar e using this from public repositories
-then you have access to all code and almost all data but you do not have
-access to fine grained GPS data and so `with_GPS` should be set to
-`FALSE`. All analysis will still run although (a) spillover analysis
-will be implemented using summary data without GPS codes (b) maps will
-not be produced.
+Options can be set to use data from data folder or directly from dataverse. Note that if you ar e using this from public repositories then you have access to all code and almost all data but you do not have access to fine grained GPS data and so `with_GPS` should be set to `FALSE`. All analysis will still run although (a) spillover analysis will be implemented using summary data without GPS codes  (b) maps will not be produced.
 
-``` r
+```{r youropts}
+
 # load data locally (TRUE) or from dataverse (FALSE)
 local_data <- FALSE
 local_datapath = "Data"
@@ -83,11 +69,12 @@ with_GPS <- FALSE
 # Save geodeidentified data, if geo data available  (usually set to `FALSE` since precise gps not publicly available)
 save_geodeidentified_data <- FALSE
 if(!with_GPS) save_geodeidentified_data <- FALSE
+
 ```
 
 ## Definitions
 
-``` r
+```{r varnames}
 # List indicators of main outcome (capture)
 
 capture_var_names <- c(
@@ -114,22 +101,25 @@ mech_var_names = c(
 
 varnames <- c(capture_var_names, mech_var_names)
 varnames2 <- paste(rbind(varnames, rep("",length(varnames))))
+
 ```
 
 ## Run Helper Code
 
-Script to create helper functions that will be used in the remainder of
-the replication.
+Script to create helper functions that will be used in the remainder of the replication.
 
-``` r
+```{r helpers}
+
 source("Code/0 HelperFunctions.R")
+
 ```
+
 
 ## Get Data
 
 ### Local data
 
-``` r
+```{r getlocal}
 if(local_data){
   abd_vill     <- load_file("DRC2012_ABD_VILL_v2.dta") 
   abd_ind      <- load_file("DRC2012_ABD_INDIV_v2.dta")
@@ -146,7 +136,7 @@ if(local_data){
 
 ### Data on `Dataverse`
 
-``` r
+```{r getdv}
 if(!local_data){
   library(dataverse)             
   Sys.setenv("DATAVERSE_SERVER" = "dataverse.harvard.edu")
@@ -173,11 +163,9 @@ if(!local_data){
 
 ### GPS data
 
-Fine grain gps data is not publicly available following privacy
-protocols. These can be loaded here if available, otherwise summary data
-is used for replication.
+Fine grain gps data is not publicly available following privacy protocols. These can be loaded here if available, otherwise summary data is used for replication.
 
-``` r
+```{r getgpsdata}
 # Raw GPS if available
 
 if(with_GPS){
@@ -187,43 +175,42 @@ if(with_GPS){
     drc.map.test <- readShapePoly(paste0(local_datapath, "/shapefiles/COD_adm2"))
     col          <- readOGR(dsn = paste0(local_datapath, "/shapefiles"), "collectivite")
   }
+
 ```
+
 
 ## Prepare Dataset and Variables
 
-Script prepares data and variables for
-analysis.
+Script prepares data and variables for analysis.
 
-``` r
+```{r clean1}
 # Merge subgroup data, treatment info, lottery info, etc. to the datasets
 source("Code/1 PrepDatasets.R")
 ```
 
-Here we prepare data for spillovers analysis. Alongside the gps database
-we use:
+Here we prepare data for spillovers analysis. Alongside the gps database we use:
 
-  - a database of possible direct assignments (dir)
-  - a database of possible indirect assignments at 5k (ind05) and 20k
-    (ind20)
-  - database of inverse propensity weights – these are different
-    depending on each assignment becuase they report the probability of
-    being assigned to the condition you are assigned to
+* a database of possible direct assignments (dir)
+* a database of possible indirect assignments at 5k (ind05) and 20k (ind20)
+* database of inverse propensity weights -- these are different depending on each assignment becuase they report the probability of being assigned to the condition you are assigned to
 
-These datasets are generated here if gps data is available, otherwise
-they are imported.
+These datasets are generated here if gps data is available, otherwise they are imported.
 
-``` r
+```{r}
+
 source("Code/2.1 PrepSpillovers_village_data.R")
 
 if(with_GPS)   source("Code/2.2 PrepSpillovers_rerandomize.R")
 if(!with_GPS)  source("Code/2.3 PrepSpillovers_import.R")
+
 ```
+
 
 # Table 2: Results on Public Fund Allocation
 
-Script presents the result on public funds allocation.
+Script presents the result on public funds allocation. 
 
-``` r
+```{r, warning=FALSE}
 dvs <- c("da109_not_verifiable", 
          "qr026i_fund_misuse",
          #"qr2729_list_experiment", 
@@ -317,20 +304,12 @@ main_table[keep_beta1, "control.sd"] <- t(main_table_pre)[keep_beta1, "Control_s
 kable(main_table)
 ```
 
-|               | control.mean | control.sd |  Effect | std\_error |    N | N\_cluster |
-| ------------- | -----------: | ---------: | ------: | ---------: | ---: | ---------: |
-| fin\_irregul  |        0.147 |      0.212 | \-0.006 |      0.020 |  394 |        394 |
-| embezzl\_dir  |        0.147 |      0.353 | \-0.001 |      0.018 | 3623 |        411 |
-| embezzl\_list |        0.462 |      0.049 | \-0.012 |      0.066 | 3676 |        411 |
-| ineq\_benef   |        2.602 |      5.888 |   0.163 |      0.495 |  409 |        409 |
-| chief\_domin  |        0.095 |      0.027 | \-0.019 |      0.039 | 2446 |        441 |
-
 # Table 3: Results on Democratic Practices
 
-Script presents the result on democratic
-practices.
+Script presents the result on democratic practices. 
 
-``` r
+```{r}
+
 dvs_mech <- c("PART_A1", "N_INTERV", "MALE_DOM", "MFI_SELECTION", "MFI_COMPOSITION", "MFI_MECHANISMS", "MFI_COMPLAINTS", "qr002CORRECT", "qi003_accept", "MFI_ACCOUNTING")
 
 mechanisms <- list(
@@ -413,22 +392,8 @@ mechanisms_table <- cbind(control.mean = add_cols[,1], control.sd = add_cols[,2]
 kable(mechanisms_table)
 ```
 
-|         | control.mean | control.sd |  Effect | std\_error |    N | N\_cluster |
-| ------- | -----------: | ---------: | ------: | ---------: | ---: | ---------: |
-| part    |      132.394 |     79.683 | \-1.199 |      6.297 |  455 |        455 |
-| inter   |       14.697 |      5.524 | \-0.267 |      0.483 |  457 |        457 |
-| male\_d |       70.255 |     15.018 |   0.161 |      1.360 |  442 |        442 |
-| sel     |        0.015 |      0.987 |   0.072 |      0.073 |  451 |        451 |
-| compos  |        0.033 |      0.963 |   0.099 |      0.078 |  452 |        452 |
-| mech    |        0.007 |      1.021 | \-0.036 |      0.094 |  414 |        413 |
-| compl   |        0.015 |      1.019 | \-0.010 |      0.052 | 3658 |        411 |
-| corr    |       37.965 |     48.568 |   0.697 |      2.384 | 3699 |        411 |
-| accep   |       39.161 |     49.025 |   2.399 |      2.335 | 1407 |        411 |
-| accoun  |      \-0.026 |      1.056 |   0.011 |      0.084 |  399 |        399 |
-
 Script to output result tables to .tex files.
-
-``` r
+```{r}
 source("Code/3.2 Output_MainResults.R")
 
 if(saving){
@@ -444,9 +409,8 @@ if(saving){
 
 # Table 4: Tuungane Balance Table
 
-Create Tuungane balance table.
-
-``` r
+Create Tuungane balance table.  
+```{r T4}
 # Balance variables
 BALANCE_VARS <- c(DIST   = "distance",
                   VILL   = "dist_mine",
@@ -471,21 +435,19 @@ balance.table <- sapply(1:length(BALANCE), function(i){
   t()
 ```
 
-|                                  | Control | Tuungane | d-stat |    N |
-| -------------------------------- | ------: | -------: | -----: | ---: |
-| Distance from major urban center |    9.27 |     8.96 | \-0.02 |  802 |
-| Distance to village mine         |    5.75 |     6.09 |   0.02 |  470 |
-| Mineral composition              |    0.84 |     0.78 | \-0.06 |  617 |
-| Presence infrastructure in 2006  |    7.67 |     7.01 | \-0.09 |  722 |
-| Former chief popular choice      |    0.18 |     0.16 | \-0.05 |  653 |
-| In-migration in 2006             |    8.46 |     8.22 | \-0.01 |  607 |
-| Age                              |   39.77 |    39.30 | \-0.03 | 5411 |
+```{r, echo=FALSE}
+tab <- as.data.frame(balance.table)
+row.names(tab) <- c("Distance from major urban center", "Distance to village mine",
+                    "Mineral composition", "Presence infrastructure in 2006",
+                    "Former chief popular choice", "In-migration in 2006", "Age")
+
+kable(tab, col.names = c("Control", "Tuungane", "d-stat", "N"))     
+```
 
 ## Table 4b: RAPID Balance Table (Supplementary)
 
-Create RAPID balance table.
-
-``` r
+Create RAPID balance table. 
+```{r T4b}
 # Balance table
 balance.table.RAPID <- sapply(1:length(BALANCE), function(i){
   data <- BALANCE[[i]]
@@ -497,19 +459,18 @@ balance.table.RAPID <- sapply(1:length(BALANCE), function(i){
   t()
 ```
 
-|                                  | Control | RAPID | d-stat |    N |
-| -------------------------------- | ------: | ----: | -----: | ---: |
-| Distance from major urban center |    8.46 |  8.00 | \-0.04 |  802 |
-| Distance to village mine         |    8.54 |  3.23 | \-0.21 |  470 |
-| Mineral composition              |    1.07 |  0.73 | \-0.25 |  617 |
-| Presence infrastructure in 2006  |    7.20 |  7.92 |   0.11 |  722 |
-| Former chief popular choice      |    0.12 |  0.14 |   0.05 |  653 |
-| In-migration in 2006             |    7.65 | 12.39 |   0.17 |  607 |
-| Age                              |   40.01 | 38.60 | \-0.10 | 5411 |
+```{r, echo=FALSE}
+tab <- as.data.frame(balance.table.RAPID)
+row.names(tab) <- c("Distance from major urban center", "Distance to village mine",
+                    "Mineral composition", "Presence infrastructure in 2006",
+                    "Former chief popular choice", "In-migration in 2006", "Age")
+
+kable(tab, col.names = c("Control", "RAPID", "d-stat", "N"))     
+```
 
 Script to output tables to .tex files.
+```{r}
 
-``` r
 source("Code/3.1 Output_BalanceTables.R")
 
 if(saving){
@@ -523,11 +484,13 @@ if(saving){
   tablr(T_Balance_RAPID)
   sink()
 }
+
 ```
 
 # Table 5: Summary Statistics
 
-``` r
+```{r T5}
+
 outcomes <- c("RAPID", "TUUNGANE", "da109_not_verifiable", "qr026i_fund_misuse",
               "qr2830_list_experiment","stdev_benefits", "Correct_B_projet",
               "PART_A1", "N_INTERV", "MALE_DOM", "MFI_SELECTION", "MFI_COMPOSITION", 
@@ -575,31 +538,12 @@ sumStats <- mapply(function(y, d){
 },y = outcomes, datasets)
 
 kable(t(sumStats ), digits = 2 )
-```
 
-|                          |    N |   mean |    sd |    min |    max |
-| ------------------------ | ---: | -----: | ----: | -----: | -----: |
-| RAPID                    | 1120 |   0.50 |  0.50 |   0.00 |   1.00 |
-| TUUNGANE                 | 1120 |   0.50 |  0.50 |   0.00 |   1.00 |
-| da109\_not\_verifiable   |  394 |   0.15 |  0.21 |   0.00 |   1.00 |
-| qr026i\_fund\_misuse     |  412 |   0.15 |  0.22 |   0.00 |   1.00 |
-| qr2830\_list\_experiment |  408 |   0.46 |  0.60 | \-1.21 |   2.79 |
-| stdev\_benefits          |  409 |   2.74 |  5.89 |   0.00 |  35.84 |
-| Correct\_B\_projet       |  435 |   0.09 |  0.48 | \-0.26 |   0.74 |
-| PART\_A1                 |  455 | 131.13 | 79.68 |  20.00 | 508.00 |
-| N\_INTERV                |  457 |  14.54 |  5.52 |   1.00 |  60.00 |
-| MALE\_DOM                |  442 |  70.71 | 15.02 |   0.00 | 100.00 |
-| MFI\_SELECTION           |  451 |   0.06 |  0.99 | \-1.49 |   1.24 |
-| MFI\_COMPOSITION         |  452 |   0.07 |  0.96 | \-2.67 |   2.07 |
-| MFI\_MECHANISMS          |  414 | \-0.01 |  1.02 | \-2.11 |   3.04 |
-| MFI\_COMPLAINTS          |  412 |   0.02 |  0.68 | \-0.85 |   2.20 |
-| qr002CORRECT             |  411 |  38.48 | 28.07 |   0.00 | 100.00 |
-| qi003\_accept            |  779 |  38.81 | 39.48 |   0.00 | 100.00 |
-| MFI\_ACCOUNTING          |  399 | \-0.03 |  1.06 | \-3.41 |   1.58 |
+```
 
 Script to output table to .tex files.
 
-``` r
+```{r}
 source("Code/3.4 Output_SumStats.R")
 
 if(saving){
@@ -607,11 +551,12 @@ if(saving){
   tablr(T_SS)
   sink()
 }
+
 ```
 
 # Tables 6 and 7: Spillovers
 
-``` r
+```{r T67, include = TRUE}
 # Note: Blocks are not used in the calculation of estimates but blocks are taken into account in the randomization inference procedure
 
 # spillover at 5km threshold
@@ -629,51 +574,12 @@ analysis20 <- sapply(gpsvars, function(j)
 CONTENT20 <- round(t(analysis20),2)
 
 kable(CONTENT05, title = "Spillovers at 5km")
-```
-
-|                        |       d | se\_d |     in | se\_in |   RMSE |    p |   N |
-| ---------------------- | ------: | ----: | -----: | -----: | -----: | ---: | --: |
-| da109\_not\_verifiable |    0.07 |  0.04 | \-0.04 |   0.04 |   0.43 | 0.94 | 156 |
-| qr026i\_fund\_misuse   |    0.11 |  0.04 | \-0.04 |   0.03 |   0.42 | 0.83 | 163 |
-| LIST\_RA               |    0.10 |  0.11 |   0.10 |   0.11 |   1.27 | 0.52 | 163 |
-| stdev\_benefits        |    0.89 |  0.70 |   0.41 |   0.68 |   8.22 | 0.22 | 163 |
-| Right1                 |  \-0.05 |  0.07 |   0.09 |   0.07 |   0.79 | 0.50 | 157 |
-| PART\_A1               | \-14.65 | 11.49 |   1.07 |  11.25 | 138.85 | 0.77 | 171 |
-| N\_INTERV              |    0.28 |  0.78 |   0.45 |   0.76 |   9.45 | 0.40 | 172 |
-| MALE\_DOM              |    1.17 |  2.46 |   0.23 |   2.40 |  29.41 | 0.80 | 169 |
-| MFI\_SELECTION         |    0.26 |  0.16 |   0.16 |   0.16 |   2.00 | 0.73 | 170 |
-| MFI\_COMPOSITION       |    0.23 |  0.15 | \-0.16 |   0.15 |   1.85 | 0.54 | 170 |
-| MFI\_MECHANISMS        |  \-0.02 |  0.17 | \-0.06 |   0.16 |   1.95 | 0.81 | 164 |
-| MFI\_COMPLAINTS        |    0.34 |  0.12 | \-0.03 |   0.12 |   1.41 | 0.89 | 163 |
-| qr002CORRECT           |  \-2.28 |  4.43 |   2.63 |   4.33 |  52.02 | 0.92 | 163 |
-| qi003\_accept          |    7.10 |  4.81 | \-6.43 |   4.74 |  81.60 | 0.94 | 301 |
-| MFI\_ACCOUNTING        |  \-0.22 |  0.18 | \-0.13 |   0.17 |   2.03 | 0.59 | 157 |
-
-``` r
 kable(CONTENT20, title = "Spillovers at 20km")
 ```
 
-|                        |      d | se\_d |      in | se\_in |   RMSE |    p |   N |
-| ---------------------- | -----: | ----: | ------: | -----: | -----: | ---: | --: |
-| da109\_not\_verifiable | \-0.02 |  0.03 |    0.01 |   0.03 |   0.29 | 0.24 | 119 |
-| qr026i\_fund\_misuse   |   0.03 |  0.04 |    0.03 |   0.03 |   0.32 | 0.54 | 126 |
-| LIST\_RA               | \-0.02 |  0.11 |  \-0.16 |   0.10 |   1.01 | 0.49 | 126 |
-| stdev\_benefits        | \-0.16 |  0.68 |  \-0.55 |   0.61 |   5.99 | 0.89 | 126 |
-| Right1                 |   0.12 |  0.09 |  \-0.03 |   0.08 |   0.74 | 0.57 | 120 |
-| PART\_A1               |   6.53 | 15.86 | \-42.05 |  13.90 | 146.56 | 0.98 | 141 |
-| N\_INTERV              | \-0.22 |  1.03 |    0.79 |   0.90 |   9.54 | 0.61 | 141 |
-| MALE\_DOM              |   0.28 |  3.30 |    0.84 |   2.95 |  29.67 | 0.91 | 133 |
-| MFI\_SELECTION         | \-0.12 |  0.18 |  \-0.01 |   0.16 |   1.69 | 0.73 | 141 |
-| MFI\_COMPOSITION       |   0.41 |  0.16 |    0.34 |   0.14 |   1.48 | 0.53 | 142 |
-| MFI\_MECHANISMS        | \-0.10 |  0.20 |  \-0.42 |   0.18 |   1.77 | 0.49 | 126 |
-| MFI\_COMPLAINTS        |   0.02 |  0.10 |    0.00 |   0.09 |   0.84 | 0.50 | 126 |
-| qr002CORRECT           | \-4.46 |  4.75 |  \-1.30 |   4.24 |  41.61 | 0.38 | 126 |
-| qi003\_accept          | \-2.14 |  5.51 |   11.36 |   4.99 |  68.11 | 0.20 | 241 |
-| MFI\_ACCOUNTING        |   0.06 |  0.15 |  \-0.14 |   0.14 |   1.33 | 0.30 | 120 |
-
 Script to output tables to .tex files.
 
-``` r
+```{r}
 source("Code/3.5 Output_Spillovers.R")
 
 if(saving){
@@ -689,7 +595,8 @@ if(saving){
 
 # Table 8: Social Desirability
 
-``` r
+```{r T8}
+
 pos <- lm_robust(FIRST_ANSWER ~  TUUNGANE + IDS_TUUNGANE_POS + POS_PROMPT,
                  weights = VILL_WEIGHT, data = ind, clusters = IDS_CDCCODE)
 
@@ -698,66 +605,26 @@ neg <- lm_robust(FIRST_ANSWER ~  TUUNGANE + IDS_TUUNGANE_NEG + NEG_PROMPT,
                  clusters = IDS_CDCCODE)
 
 summary(pos)
-```
-
-    ## 
-    ## Call:
-    ## lm_robust(formula = FIRST_ANSWER ~ TUUNGANE + IDS_TUUNGANE_POS + 
-    ##     POS_PROMPT, data = ind, weights = VILL_WEIGHT, clusters = IDS_CDCCODE)
-    ## 
-    ## Weighted, Standard error type:  CR2 
-    ## 
-    ## Coefficients:
-    ##                  Estimate Std. Error t value  Pr(>|t|) CI Lower CI Upper
-    ## (Intercept)      0.642491    0.01755 36.6121 6.593e-82  0.60785  0.67714
-    ## TUUNGANE         0.007066    0.02459  0.2873 7.740e-01 -0.04130  0.05543
-    ## IDS_TUUNGANE_POS 0.008741    0.02906  0.3007 7.638e-01 -0.04843  0.06591
-    ## POS_PROMPT       0.200852    0.01999 10.0464 5.770e-19  0.16139  0.24032
-    ##                     DF
-    ## (Intercept)      167.7
-    ## TUUNGANE         332.8
-    ## IDS_TUUNGANE_POS 344.4
-    ## POS_PROMPT       171.5
-    ## 
-    ## Multiple R-squared:  0.05624 ,   Adjusted R-squared:  0.05549 
-    ## F-statistic: 66.62 on 3 and 417 DF,  p-value: < 2.2e-16
-
-``` r
 summary(neg)
 ```
 
-    ## 
-    ## Call:
-    ## lm_robust(formula = FIRST_ANSWER ~ TUUNGANE + IDS_TUUNGANE_NEG + 
-    ##     NEG_PROMPT, data = ind, weights = VILL_WEIGHT, clusters = IDS_CDCCODE)
-    ## 
-    ## Weighted, Standard error type:  CR2 
-    ## 
-    ## Coefficients:
-    ##                   Estimate Std. Error t value   Pr(>|t|) CI Lower CI Upper
-    ## (Intercept)       0.843344    0.01314 64.1606 1.605e-115  0.81738  0.86930
-    ## TUUNGANE          0.015807    0.01850  0.8543  3.935e-01 -0.02059  0.05220
-    ## IDS_TUUNGANE_NEG  0.008741    0.02906  0.3007  7.638e-01 -0.04843  0.06591
-    ## NEG_PROMPT       -0.209593    0.02110 -9.9352  1.097e-18 -0.25123 -0.16795
-    ##                     DF
-    ## (Intercept)      158.9
-    ## TUUNGANE         325.9
-    ## IDS_TUUNGANE_NEG 344.4
-    ## NEG_PROMPT       172.9
-    ## 
-    ## Multiple R-squared:  0.05624 ,   Adjusted R-squared:  0.05549 
-    ## F-statistic: 66.62 on 3 and 417 DF,  p-value: < 2.2e-16
 
-|            | Positive prompt | Negative prompt | Difference | (se)  |
-| ---------- | :-------------- | :-------------- | :--------- | :---- |
-| Control    | 0.642           | 0.843           | 0.201      | 0.02  |
-| Tuungane   | 0.65            | 0.859           | 0.21       | 0.021 |
-| Difference | 0.007           | 0.016           | 0.009      |       |
-| (se)       | 0.025           | 0.019           | 0.029      |       |
+```{r, echo=FALSE}
+source("Code/3.6 Output_SocDesirability.R")
+
+if(saving){
+  sink(paste0(output_folder, "/Table8_SocDes.tex"))
+  tablr(sd.Table)
+  sink()
+}
+rownames(OUTPUT) <-  c("Control", "Tuungane", "Difference", "(se)")
+kable(OUTPUT, col.names = c("Positive prompt" , "Negative prompt"	,	"Difference" , "(se)") )
+
+```
 
 # Table 9: Robustness
 
-``` r
+```{r T9, include = TRUE}
 ## 1: Alternative treatment
 
 robust_alt_treatment <- list(
@@ -1011,48 +878,23 @@ robust_mechanisms[,3] <- paste0("(", robust_mechanisms[,3], ")")
 robust_mechanisms <- splice_sds(robust_mechanisms[,2:3])
 
 robust_main_results <- rbind(robust_main_results, robust_mechanisms)
+
+
 ```
 
-``` r
+```{r, include=FALSE}
+varnames_ <- c(varnames, varnames)
+varnames_[ 1:length(varnames_) %% 2 != 0] <- varnames
+varnames_[ 1:length(varnames_) %% 2 == 0] <- ""
+```
+
+```{r print_tab9}
 kable(cbind(varnames_, robust_main_results, robust_alt_treatment, robust_village_level, robust_lott_bins, robust_prop_weight), col.names = c("", "Base", "Alt. Treat", "Village (weighted)", "No block FE", "Village (unweighted)"))
 ```
 
-|                                  | Base    | Alt. Treat | Village (weighted) | No block FE | Village (unweighted) |
-| -------------------------------- | :------ | :--------- | :----------------- | :---------- | :------------------- |
-| Financial Irregularities         | \-0.006 | 0.001      | \-0.004            | \-0.004     | \-0.004              |
-|                                  | (0.02)  | (0.02)     | (0.021)            | (0.021)     | (0.021)              |
-| Embezzlement (direct)            | \-0.001 | \-0.005    | 0.006              | \-0.001     | 0.006                |
-|                                  | (0.018) | (0.019)    | (0.01)             | (0.021)     | (0.022)              |
-| Embezzlement (list experiment)   | \-0.007 | \-0.017    | 0.031              | 0.013       | 0.031                |
-|                                  | (0.054) | (0.055)    | (0.023)            | (0.06)      | (0.022)              |
-| Inequality of (Private) Benefits | 0.163   | 0.182      | 0.206              | 0.206       | 0.206                |
-|                                  | (0.495) | (0.49)     | (0.588)            | (0.588)     | (0.588)              |
-| Dominance of Chief’s Preferences | 0.024   | 0.034      | 0                  | 0.017       | 0.008                |
-|                                  | (0.03)  | (0.03)     | (0)                | (0.031)     | (0.005)              |
-| Meeting Attendance               | \-1.199 | \-1.482    | \-1.983            | \-1.983     | \-1.983              |
-|                                  | (6.297) | (6.347)    | (7.403)            | (7.403)     | (7.403)              |
-| Interventions in Meeting         | \-0.267 | \-0.12     | \-0.391            | \-0.391     | \-0.391              |
-|                                  | (0.483) | (0.494)    | (0.508)            | (0.508)     | (0.508)              |
-| Dominance of Men in Discussion   | 0.161   | \-0.026    | 0.158              | 0.158       | 0.158                |
-|                                  | (1.36)  | (1.375)    | (1.49)             | (1.49)      | (1.49)               |
-| Participatory Selection Methods  | 0.072   | 0.08       | 0.072              | 0.072       | 0.072                |
-|                                  | (0.073) | (0.074)    | (0.094)            | (0.094)     | (0.094)              |
-| Committee Composition            | 0.099   | 0.078      | 0.083              | 0.083       | 0.083                |
-|                                  | (0.078) | (0.079)    | (0.096)            | (0.096)     | (0.096)              |
-| Accountability Mechanisms        | \-0.036 | \-0.017    | \-0.029            | \-0.029     | \-0.029              |
-|                                  | (0.094) | (0.096)    | (0.1)              | (0.1)       | (0.1)                |
-| Private Complaints               | \-0.01  | \-0.015    | 0.014              | \-0.006     | 0.011                |
-|                                  | (0.052) | (0.054)    | (0.028)            | (0.066)     | (0.067)              |
-| Knowledge of Project Amount      | 0.697   | 0.06       | 0.646              | 0.414       | 1.436                |
-|                                  | (2.384) | (2.411)    | (1.647)            | (2.837)     | (2.86)               |
-| Willingness to Seek Information  | 2.399   | 1.579      | 1.964              | 2.846       | 3.661                |
-|                                  | (2.335) | (2.342)    | (2.289)            | (2.967)     | (3.004)              |
-| Quality of Accounting            | 0.011   | \-0.01     | 0.013              | 0.013       | 0.013                |
-|                                  | (0.084) | (0.086)    | (0.105)            | (0.105)     | (0.105)              |
-
 # Table 10: Heterogeneous Effects by Initial Institutions
 
-``` r
+```{r T10}
 # schools
 noschools <- list(
   
@@ -1208,42 +1050,8 @@ kable( cbind(varnames_, robust_main_results, robust_noschools, robust_nocommitte
        col.names = c("", "Base", "No School", "Inherited", "No Committee"))
 ```
 
-|                                  | Base    | No School | Inherited | No Committee |
-| -------------------------------- | :------ | :-------- | :-------- | :----------- |
-| Financial Irregularities         | \-0.006 | 0.006     | \-0.047   | 0.004        |
-|                                  | (0.02)  | (0.031)   | (0.035)   | (0.042)      |
-| Embezzlement (direct)            | \-0.001 | \-0.009   | \-0.02    | \-0.004      |
-|                                  | (0.018) | (0.03)    | (0.029)   | (0.035)      |
-| Embezzlement (list experiment)   | \-0.007 | \-0.046   | \-0.092   | \-0.052      |
-|                                  | (0.054) | (0.092)   | (0.097)   | (0.103)      |
-| Inequality of (Private) Benefits | 0.163   | 1.526     | 1.596     | \-0.379      |
-|                                  | (0.495) | (0.961)   | (0.855)   | (1.139)      |
-| Dominance of Chief’s Preferences | 0.024   | \-0.032   | 0.007     | \-0.036      |
-|                                  | (0.03)  | (0.047)   | (0.05)    | (0.063)      |
-| Meeting Attendance               | \-1.199 | \-4.547   | \-1.248   | \-9.803      |
-|                                  | (6.297) | (10.954)  | (13.175)  | (15.321)     |
-| Interventions in Meeting         | \-0.267 | \-1.046   | \-0.358   | \-1.233      |
-|                                  | (0.483) | (0.939)   | (0.903)   | (1.125)      |
-| Dominance of Men in Discussion   | 0.161   | \-2.196   | \-1.131   | 0.749        |
-|                                  | (1.36)  | (2.566)   | (2.433)   | (2.956)      |
-| Participatory Selection Methods  | 0.072   | 0.328     | 0.389     | 0.106        |
-|                                  | (0.073) | (0.157)   | (0.163)   | (0.169)      |
-| Committee Composition            | 0.099   | 0.091     | \-0.006   | \-0.161      |
-|                                  | (0.078) | (0.166)   | (0.17)    | (0.199)      |
-| Accountability Mechanisms        | \-0.036 | \-0.267   | \-0.015   | \-0.251      |
-|                                  | (0.094) | (0.15)    | (0.159)   | (0.18)       |
-| Private Complaints               | \-0.01  | 0.086     | 0.098     | \-0.105      |
-|                                  | (0.052) | (0.097)   | (0.094)   | (0.115)      |
-| Knowledge of Project Amount      | 0.697   | \-0.1     | \-1.266   | 2.334        |
-|                                  | (2.384) | (4.318)   | (4.566)   | (5.543)      |
-| Willingness to Seek Information  | 2.399   | 6.958     | 1.207     | 0.791        |
-|                                  | (2.335) | (4.453)   | (4.354)   | (5.265)      |
-| Quality of Accounting            | 0.011   | \-0.071   | \-0.075   | 0.174        |
-|                                  | (0.084) | (0.171)   | (0.187)   | (0.194)      |
-
 Script to output tables to .tex files.
-
-``` r
+```{r}
 source("Code/3.3 Output_Robustness.R")
 
 if(saving){
@@ -1255,14 +1063,15 @@ if(saving){
   tablr(T7)
   sink()
 }
+
 ```
 
 # Figure 1: Map Tuungane Treatment and Control
 
-This figure requires aceess to GPS data and is only generated if
-`with_GPS = TRUE`.
+This figure requires aceess to GPS data and is only generated if `with_GPS = TRUE`.
 
-``` r
+```{r, eval = with_GPS}
+
 if(with_GPS){
   
 gps2 <- GPS
@@ -1307,7 +1116,8 @@ if(saving){
 
 # Figure 2: Timeline
 
-``` r
+```{r, include = TRUE, fig.height=12, fig.width=12}
+
 DIS = unique(D$DISTRICT)
 DISTRICT=D$DISTRICT
 CHEF = D$CHEF
@@ -1315,13 +1125,13 @@ CHEF = D$CHEF
 fig_timeline <- function(){
   par(mfrow=c(2,2))
   
-  T1a =     as.Date(D$lottery_date_med, origin="1960-01-01")
-  T1b =     as.Date(D$T1_end_cdv_med, origin="1960-01-01")
-  T1c =     as.Date(D$T1_end_cdc_med, origin="1960-01-01") 
-  Ra =  as.Date(D$stepA, origin="1960-01-01")
-  Rb =  as.Date(D$stepD, origin="1960-01-01")
+  T1a = 	as.Date(D$lottery_date_med, origin="1960-01-01")
+  T1b = 	as.Date(D$T1_end_cdv_med, origin="1960-01-01")
+  T1c = 	as.Date(D$T1_end_cdc_med, origin="1960-01-01") 
+  Ra = 	as.Date(D$stepA, origin="1960-01-01")
+  Rb = 	as.Date(D$stepD, origin="1960-01-01")
   up = .2
-  # lshift = 320
+  #	lshift = 320
   lshift = 800
   
   RANGE=c(min(T1a), max(Rb,T1c))
@@ -1333,7 +1143,7 @@ fig_timeline <- function(){
   
   for(j in 1:length(DIS)){
     CH = unique(CHEF[DISTRICT == DIS[j]])
-    DI = DIS[j] 
+    DI = DIS[j]	
     o = rank(T1a[DISTRICT == DIS[j]])
     plot(RANGE, RANGE, main=DI, ylim = c(0, length(CH)+1), xlim=c(min(RANGE)-lshift, max(RANGE)), axes=F,  xlab="", ylab = "", cex.main=2)
     axis(1, at=RANGE2, labels=format(RANGE2, "%b %Y"), las=1, tick=F, cex.axis=1.5)
@@ -1347,33 +1157,29 @@ fig_timeline <- function(){
       # Red line:
       segments(Ra[CHEF==CH[i]] ,j+up, Rb[CHEF==CH[i]],j+up, col="red", lwd=3)
       text(min(RANGE)-lshift,j, CH[i], pos=4, cex=1.3)
-    }   
+    }	
   }
   
 }
 
-fig_timeline()  
+fig_timeline()	
 ```
 
-![](20190805_rep_files/figure-gfm/unnamed-chunk-14-1.png)<!-- -->
-
-``` r
+```{r}
 #output figure to .pdf
 if(saving){
   pdf(file=paste0(output_folder, "/Fig2_Timeline.pdf"), width=13, height=15)
-  fig_timeline()    
+  fig_timeline()	
   dev.off()
 }
 ```
-
-    ## png 
-    ##   2
 
 # Figure 3: Main Results
 
 Script plots main results.
 
-``` r
+```{r}
+
 #rescale inequality of private benefits
 res_main_table <- main_table
 v <- which(rownames(main_table) %in% c("ineq_benef"))
@@ -1456,33 +1262,29 @@ fig_mechanisms <- function(){
 fig_mechanisms()
 ```
 
-![](20190805_rep_files/figure-gfm/unnamed-chunk-16-1.png)<!-- -->
-
-``` r
+```{r}
 #output figure to .pdf
 if(saving){
   pdf(paste0(output_folder, "/Fig3_MainResults.pdf"), width = 11, height = 8)
   fig_mechanisms()
   dev.off()
 }
-```
 
-    ## png 
-    ##   2
+```
 
 # Figure 4: Spillovers
 
-This figure requires access to GPS data and is only generated if
-`with_GPS = TRUE`.
+This figure requires access to GPS data and is only generated if `with_GPS = TRUE`.
 
-``` r
+```{r, include = TRUE, eval=with_GPS}
+
 if(with_GPS){
 
 # This defines a "translucent white" and a  "translucent black"
 colors = c(rgb(1,1,1,.8), rgb(0,0,0,.8))
 
 # Tuungane vs Control
-TYPE1 = 1 +  1*(X$TUUNGANE==1) 
+TYPE1 =	1 +  1*(X$TUUNGANE==1) 
 col  = rainbow(2)
 table(TYPE1)
 
@@ -1538,31 +1340,33 @@ fig_spillovers <- function(){
 }
 ```
 
-``` r
+```{r, eval=with_GPS}
 if(with_GPS){
 if(saving){
   pdf(file=paste0(output_folder, "/Fig4_Spillovers.pdf"), width=12, height=4) 
   fig_spillovers()
   dev.off()
 }}
+
 ```
 
 # Figure 6: Minimal Detectable Effects
 
-Below we calculate power under different absolute value of ATE for
-financial irregularities based on a simulation approach using the
-package `DeclareDesign`. We formally declare our data structure, our
-potential outcomes, assignment scheme, our estimand and estimators.
+```{r, echo=FALSE}
+# saveRDS(vill, "Data/vill.RDS")
+set.seed(1)
+# vill <- readRDS(file = "Data/vill.RDS")
+```
 
-We calculate residuals from the regression of financial irregularity on
-the Tuungane treatment with block fixed effects among the
-control
+Below we calculate power under different absolute value of ATE for financial irregularities based on a simulation approach using the package `DeclareDesign`. We formally declare our data structure, our potential outcomes, assignment scheme, our estimand and estimators.
+
+We calculate residuals from the regression of financial irregularity on the Tuungane treatment with block fixed effects among the control 
 
 <!-- For dependent variables outcomes such as financial irregularities, we draw potential outcomes for control ($Y[Z=0]$) from observed outcomes in the control sample. In the data generating process, we assume $Y[Z=1] = Y[Z=0] + \tau + \epsilon$ where $\tau$ is the average treatment effect and $\epsilon$ the error at the village level (unit of analysis) normally distributed around a mean of 0, with standard deviation of 1. -->
 
 <!-- Note: Here another approach would be to specify ($Y[Z=0]$) for a given cluster as the block-level average with a normally distributed error term for the village.  -->
 
-``` r
+```{r}
 df = vill
 dv = "da109_not_verifiable"
 
@@ -1612,23 +1416,20 @@ design_tuungane <- function(ate){
   design <- U + Y + Z + R  + Q + B #get_weights
   return(design)
 }
+
 ```
 
-We then run 500 simulations of this design assuming ATEs ranging \[0,
-0.2\] to estimate statistical power.
+We then run 500 simulations of this design assuming ATEs ranging [0, 0.2] to estimate statistical power.
 
-``` r
+```{r}
+
 d1_fin_irreg <- design_tuungane(ate = 0)
 ates = seq(0, .2, length = 7)
 d1s <- redesign(d1_fin_irreg, ate = ates)
 diagnoses1 <- diagnose_design(d1s, bootstrap_sims = 0)
 
 mde_plot(diagnoses1, "Financial Irregularities", xlim = c(0,.2))
-```
 
-![](20190805_rep_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
-
-``` r
 if(saving){
   pdf(paste0(output_folder, "/Fig6_MDE_FinIrreg.pdf"), width = 5, height = 4)
   mde_plot(diagnoses1, "Financial Irregularities", xlim = c(0,.2))
@@ -1636,23 +1437,16 @@ if(saving){
 }
 ```
 
-    ## png 
-    ##   2
-
 # Figure 5: Information for Consort Chart
 
-We explore the number of LLUs visited and surveys conducted during Steps
-A and D.
+We explore the number of LLUs visited and surveys conducted during Steps A and D.
 
 ## Step A Information
 
-We consider a village as visited if any data was collected during Step A
-in that village. That is anything from (variable used): Step A
-enumerator survey (a\_3\_date\_village\_entry), Step A chief survey
-(ac\_3\_date), Step A village meeting survey (am\_3\_ag\_date), or at
-least one of Step A’s household surveys (av\_10\_gender).
+We consider a village as visited if any data was collected during Step A in that village. That is anything from (variable used): Step A enumerator survey (a_3_date_village_entry), Step A chief survey (ac_3_date), Step A village meeting survey (am_3_ag_date), or at least one of Step A's household surveys (av_10_gender).
 
-``` r
+```{r}
+
 #join indiviual and village data
 ABD <- left_join(ind, vill, by = intersect(names(ind), names(vill)) )
 
@@ -1667,12 +1461,13 @@ ABD$StepA <- ( !(ABD$a_3_date_village_entry=="") | !(ABD$ac_3_date=="") | !(ABD$
 stepA_Total<-length(ABD$StepA[ABD$StepA==1 & ABD$vill==1])
 stepA_Tuungane <-length(ABD$StepA[ABD$StepA==1 & ABD$vill==1 & ABD$TUUNGANE==1])
 stepA_Control <-length(ABD$StepA[ABD$StepA==1 & ABD$vill==1 & ABD$TUUNGANE==0])
+
 ```
 
-How many household surveys were collected during Step
-A?
+How many household surveys were collected during Step A?
 
-``` r
+```{r}
+
 # Take the most complete variable of the Step A household survey: av_10_gender
 
 stepA_HHs <- length(ABD$av_10_gender[!is.na(ABD$av_10_gender)])    
@@ -1680,28 +1475,18 @@ stepA_HHs_Tuungane <- length(ABD$av_10_gender[!is.na(ABD$av_10_gender) & ABD$TUU
 stepA_HHs_Control <- length(ABD$av_10_gender[!is.na(ABD$av_10_gender) & ABD$TUUNGANE==0])
 
 stepA_HHs
-```
-
-    ## [1] 2214
-
-``` r
 stepA_HHs_Tuungane
-```
-
-    ## [1] 1111
-
-``` r
 stepA_HHs_Control
+
 ```
 
-    ## [1] 1103
 
 ## Step B Information
 
-We consider a village as visited if any data was collected during Step B
-in that village.
+We consider a village as visited if any data was collected during Step B in that village. 
 
-``` r
+```{r, warning=FALSE}
+
 ABD$StepB <- (!(ABD$b_3_date==""))
 ABD %<>% group_by(IDV) %>% mutate(vill = row_number()) %>% ungroup()
 
@@ -1711,30 +1496,18 @@ stepB_Tuungane<-length(ABD$StepB[ABD$StepB==1  & ABD$vill==1  & ABD$TUUNGANE==1]
 stepB_Control<-length(ABD$StepB[ABD$StepB==1  & ABD$vill==1  & ABD$TUUNGANE==0])
 
 stepB_Total
-```
-
-    ## [1] 454
-
-``` r
 stepB_Tuungane
-```
-
-    ## [1] 228
-
-``` r
 stepB_Control
+
 ```
 
-    ## [1] 226
 
 ## Step D Information
 
-We consider a village as visited if any data was collected during Step D
-in that village. That is anything from (variable used): the Step D chief
-survey (cq007\_date), or at least one of Step D’s household surveys
-(q000\_consent\_beg).
+We consider a village as visited if any data was collected during Step D in that village. That is anything from (variable used): the Step D chief survey (cq007_date), or at least one of Step D's household surveys (q000_consent_beg).
 
-``` r
+```{r}
+
 # household survey to village level
 q11<-aggregate(q011_sex ~ IDV, data=ABD, function(x) {sum(!is.na(x))}, na.action = NULL)
 colnames(q11) <- c("IDV","q11")
@@ -1759,75 +1532,23 @@ missD_ControlRapid<-table(ABD$StepD[ABD$vill==1 & ABD$IDS_RAPID==1 & ABD$TUUNGAN
 missD_ControlNotrapid<-table(ABD$StepD[ABD$vill==1 & ABD$IDS_RAPID==0 & ABD$TUUNGANE==0], ABD$IDS_DISTRICT[ABD$vill==1 & ABD$IDS_RAPID==0  & ABD$TUUNGANE==0])
 
 stepD_Total
-```
-
-    ## [1] 816
-
-``` r
 stepD_TuuRapid
-```
-
-    ## [1] 208
-
-``` r
 stepD_TuuNotrapid
-```
-
-    ## [1] 200
-
-``` r
 stepD_ControlRapid
-```
-
-    ## [1] 205
-
-``` r
 stepD_ControlNotrapid
-```
 
-    ## [1] 203
-
-``` r
 missD_TuuRapid
-```
-
-    ##        
-    ##         HK MN SK TG
-    ##   FALSE  0 65  3  4
-    ##   TRUE  74  9 72 53
-
-``` r
 missD_TuuNotrapid
-```
-
-    ##        
-    ##         HK MN SK TG
-    ##   FALSE  6 65  2  7
-    ##   TRUE  68  9 73 50
-
-``` r
 missD_ControlRapid
-```
-
-    ##        
-    ##         HK MN SK TG
-    ##   FALSE  1 65  3  6
-    ##   TRUE  73  8 71 53
-
-``` r
 missD_ControlNotrapid
+
 ```
 
-    ##        
-    ##         HK MN SK TG
-    ##   FALSE  3 64  3  7
-    ##   TRUE  71  9 71 52
 
-How many panel household surveys were collected during Step D (RAPID
-villages
-only)?
+How many panel household surveys were collected during Step D (RAPID villages only)?
 
-``` r
+```{r}
+
 # Take the most complete variable of the Step D household survey: q011_sex
 
 stepD_Panel_Tuungane <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DMC" & ABD$TUUNGANE==1])    
@@ -1835,21 +1556,13 @@ stepD_Panel_Tuungane <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES
 stepD_Panel_Control <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DMC" & ABD$TUUNGANE==0])    
 
 stepD_Panel_Tuungane
-```
-
-    ## [1] 947
-
-``` r
 stepD_Panel_Control
 ```
 
-    ## [1] 916
+How many additional household surveys were collected during Step D (RAPID and Survey-only villages)?
 
-How many additional household surveys were collected during Step D
-(RAPID and Survey-only
-villages)?
+```{r}
 
-``` r
 # Take the most complete variable of the Step D household survey: q011_sex
 
 stepD_HH_TuuRap <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==1 & ABD$IDS_RAPID==1])    
@@ -1861,33 +1574,16 @@ stepD_HH_ControlRap <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=
 stepD_HH_ControlNotrapid <- length(ABD$q011_sex[!is.na(ABD$q011_sex) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==0 & ABD$IDS_RAPID==0])    
 
 stepD_HH_TuuRap
-```
-
-    ## [1] 981
-
-``` r
 stepD_HH_TuuNotrapid
-```
-
-    ## [1] 946
-
-``` r
 stepD_HH_ControlRap
-```
-
-    ## [1] 971
-
-``` r
 stepD_HH_ControlNotrapid
+
 ```
 
-    ## [1] 983
+How many willingness to collect information surveys were collected during Step D (RAPID and Survey-only villages)?
 
-How many willingness to collect information surveys were collected
-during Step D (RAPID and Survey-only
-villages)?
+```{r}
 
-``` r
 # Take the most complete variable of the Step D household survey: q011_sex
 
 info_TuuRap <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==1 & ABD$IDS_RAPID==1])    
@@ -1899,204 +1595,74 @@ info_ControlRap <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TY
 info_ControlNotrapid <- length(ABD$qi003_accept[!is.na(ABD$qi003_accept) & ABD$IDS_TYPES=="DML" & ABD$TUUNGANE==0 & ABD$IDS_RAPID==0])    
 
 info_TuuRap
-```
-
-    ## [1] 352
-
-``` r
 info_TuuNotrapid
-```
-
-    ## [1] 340
-
-``` r
 info_ControlRap
-```
-
-    ## [1] 349
-
-``` r
 info_ControlNotrapid
-```
 
-    ## [1] 366
+```
 
 # Additional statistics
 
-The paper quotes additional statistics derived from these datasets.
-These numbers are reproduced below.
+The paper quotes additional statistics derived from these datasets. These numbers are reproduced below.
 
-``` r
+```{r}
 #Average share of women in committee in control and treatment
 vill %>% group_by(TUUNGANE) %>% summarize(share = mean(SHARE, na.rm = TRUE))
-```
 
-    ## # A tibble: 2 x 2
-    ##   TUUNGANE share
-    ##      <dbl> <dbl>
-    ## 1        0 0.171
-    ## 2        1 0.201
-
-``` r
 #External accountability mechanism present
 mean(ABD_MERGE$DR_MECHANISMS_EXT, na.rm=T)
-```
 
-    ## [1] 12.5
-
-``` r
 #External accountability mechanism present and required to report to community
 mean(ABD_MERGE$DR_MECHANISMS_COMM, na.rm=T)
-```
 
-    ## [1] 11.11111
-
-``` r
 #Accounting form present upon arrival of enumerators team
 mean(vill$da027_got_accounting_form, na.rm=T)
-```
 
-    ## [1] 0.831202
-
-``` r
 #Funds accounted for RAPID committee
 mean(vill$ACCOUNTED_COMM, na.rm=T)
-```
 
-    ## [1] 80.50629
-
-``` r
 #Funds accounted for adit teams
 mean(vill$ACCOUNTED_EVAL, na.rm=T)
-```
 
-    ## [1] 80.84911
-
-``` r
 #Share of funds justified
 mean(vill$PART_JUSTIFIED, na.rm=T)
-```
 
-    ## [1] 0.5769439
-
-``` r
 #Share of funds credibly justified
 mean(vill$PART_CREDIBLY_JUSTIFIED, na.rm=T)
-```
 
-    ## [1] 46.74077
-
-``` r
 #General pop guessed correct grant amount
 mean(ind$qr002CORRECT[!ind$CHIEF & ind$TUUNGANE==1], na.rm=TRUE)
-```
 
-    ## [1] 38.05405
-
-``` r
 #Willing to seek information among control
 table(ind$qi003_accept[ind$TUUNGANE==0])
-```
 
-    ## 
-    ##   0 100 
-    ## 435 280
-
-``` r
 #Why refused to seek information
 table(ind$qi004_why_not_accept[ind$qi003_accept==0&ind$TUUNGANE==0])
-```
 
-    ## 
-    ##                                       Husband refuses 
-    ##                         29                          9 
-    ##         I do not have time It is inappropriate to ask 
-    ##                         90                         75 
-    ##               Other reason   Strange game and I doubt 
-    ##                        192                         40
-
-``` r
 #Committed elected
 mean(vill$ELECTIONS1[vill$IDV_RAPID==1])
-```
-
-    ## [1] 35.35714
-
-``` r
 #Committee elected, lott or concensus
 mean(vill$ELECTIONS_LOTT_CON1[vill$TUUNGANE==1], na.rm=TRUE)
-```
 
-    ## [1] 77.33333
-
-``` r
 #Project through election
 mean(vill$ELECTIONS2[vill$IDV_RAPID==1])
-```
-
-    ## [1] 25.35714
-
-``` r
 mean(vill$ELECTIONS_LOTT_CON2[vill$TUUNGANE==1], na.rm=TRUE)
-```
 
-    ## [1] 75.55556
-
-``` r
 #Spillover 5km
 table(gps$TUUNGANE, gps$indirect05)
-```
-
-    ##    
-    ##       0   1
-    ##   0 269 235
-    ##   1 301 215
-
-``` r
 v <- !is.na(gps$gps_weight05); sum(v)
-```
-
-    ## [1] 364
-
-``` r
 table(gps$TUUNGANE[v], gps$indirect05[v])
-```
 
-    ##    
-    ##       0   1
-    ##   0  49 129
-    ##   1  74 112
-
-``` r
 #Spillover 20km
 table(gps$TUUNGANE, gps$indirect20)
-```
-
-    ##    
-    ##       0   1
-    ##   0  68 436
-    ##   1  78 438
-
-``` r
 v <- !is.na(gps$gps_weight20); sum(v)
-```
-
-    ## [1] 316
-
-``` r
 table(gps$TUUNGANE[v], gps$indirect20[v])
-```
 
-    ##    
-    ##       0   1
-    ##   0  25 127
-    ##   1  41 123
-
-``` r
 #Spillover both
 sum(!is.na(gps$gps_weight20)&!is.na(gps$gps_weight05))
 ```
 
-    ## [1] 104
-
 This concludes the replication file.
+
+
+

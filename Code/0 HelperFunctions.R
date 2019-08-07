@@ -9,6 +9,7 @@ Mode <- function(x) {
   ux <- unique(x)
   ux[which.max(tabulate(match(x, ux)))]
 }
+
 Mode(c("a","b","a"))
 
 #######
@@ -16,22 +17,6 @@ Mode(c("a","b","a"))
 #######
 
 agg_to_mean <- function(data, by)  aggregate(data, by=by, FUN="mean", na.rm=TRUE)
-
-#######
-# Function to report mean in two groups and standardized difference
-#######
-
-balance_function <- function(Y, X, W = rep(1, length(X))){
-  
-  K <- (!is.na(Y[X==0]) & !is.na(W[X==0]))
-  c(
-    control   = weighted.mean(Y[X==0], W[X==0], na.rm = TRUE),
-    treatment = weighted.mean(Y[X==1], W[X==1], na.rm = TRUE),
-    d_stat    = (weighted.mean(Y[X==1], W[X==1], na.rm = TRUE) -
-                 weighted.mean(Y[X==0], W[X==0], na.rm = TRUE))/
-                (wt.sd(Y[X==0][K], W[X==0][K])),
-    N         = sum(!is.na(Y[X==1 | X==0]))
-  )}
 
 
 #######
@@ -46,23 +31,22 @@ normalize <- function(.data,
                       .stats = NULL) {
   # create temporary dataset  without missngness in
   # .weight, .outcome and filtered by .treat == 0
-  .temp <-
-    .data[!is.na( eval(parse(text = paste0(".data$", .weight))) ) &
-            !is.na( eval(parse(text = paste0(".data$", .outcome))) ) &
-            eval(parse(text = paste0(".data$", .treat))) == 0, ]
+  .temp <- .data[!is.na( .data[, .weight])  &
+                 !is.na( .data[, .outcome]) &
+                 .data[, .treat]== 0, ]
   # get the weighted mean of .outcome variable
   Ymean <-  weighted.mean(x = .temp[ , .outcome],
                           w = .temp[ , .weight],
                           na.rm = TRUE)
   # get the analytic weighted std. dev. of .outcome variable
-  Yvar <- ( nrow(.temp) / (sum(.temp[ , .weight]) * (nrow(.temp) - 1)) ) *
-    sum( .temp[ , .weight] * (.temp[ , .outcome] - Ymean)^2 )
+  Ysd <- wt.sd(.temp[ , .outcome], .temp[ , .weight])
   # return normalized vector of .outcome
-  if (is.null(.stats)) return( (.data[ , .outcome] - Ymean)/sqrt(Yvar) )
-  else return(list(".outcome_norm" = (.data[ , .outcome] - Ymean)/sqrt(Yvar),
+  if (is.null(.stats)) return( (.data[ , .outcome] - Ymean)/ Ysd )
+  else return(list(".outcome_norm" = (.data[ , .outcome] - Ymean)/ Ysd,
                    ".outcome_mean" = Ymean,
                    ".outcome_sd" = sqrt(Yvar)))
 }
+
 
 # weighted mean effects
 
@@ -72,55 +56,26 @@ wmeaneffects <- function(.data,
                          .outcomes,
                          .varname = "index_new",
                          .cond = NULL) {
-  require(magrittr)
-  require(plyr)
-  require(dplyr)
-  
-  if (is.null(.cond)) {
-    .subset <- rep(TRUE, times = nrow(.data))
-    .temp <- .data
-  } else {
-    .subset <- eval(expr = parse(text = .cond),
-                    envir = .data,
-                    enclos = parent.frame())
-    .temp <- .data[.subset, ]
-  }
-  
-  .out <- rep(NA, times = nrow(.data)) %>% cbind
-  colnames(.out) <- .varname
-  .out[.subset,.varname] <-
-    .temp %>%
-    sapply(X = .outcomes,
-           FUN = normalize,
-           .data = .,
-           .treat = .treat,
-           .weight = .weight) %>%
-    apply(MARGIN = 1,
-          FUN = mean,
-          na.rm = TRUE) %>%
-    cbind(.temp, "meaneff" = . ) %>%
-    as.data.frame %>%
-    normalize(.data = .,
-              .treat = .treat,
-              .weight = .weight,
-              .outcome = "meaneff") %>%
-    round(digits = 6) %>%
-    as.vector
+
+  .temp   <- .data
+
+  .out <- .temp %>% 
+          sapply(X = .outcomes, FUN = normalize, .data = ., .treat = .treat, .weight = .weight) %>%
+          apply(MARGIN = 1, FUN = mean, na.rm = TRUE) %>% 
+          cbind(.temp, "meaneff" = . ) %>%
+          as.data.frame %>%
+          normalize(.data = .,
+                    .treat = .treat,
+                    .weight = .weight,
+                    .outcome = "meaneff") %>%
+          round(digits = 6) %>%
+          as.vector
+         
   return(.out)
 }
 
 
 
-
-#######
-# Function to 
-# "fixdec"
-#######
-
-fixdec <- function(.x, .dec = 3, .brac = FALSE) {
-  if (.brac) format(round(.x, .dec), nsmall = .dec) %>% paste0("(", . , ")")
-  else format(round(.x, .dec), nsmall = .dec)
-}
 
 ####### 
 # Function to extract tables of different results for different conditions
@@ -182,68 +137,6 @@ tablr <- function(x){
 
 
 #######
-# Function to generate a pattern of rounding and bracketing
-#######
-
-out_line <- function(.out_list,
-                     .dec_pattern = c(2,2,2,0),
-                     .brac_pattern = c(F,F,T,F)) {
-  mapply(fixdec,
-         c(.out_list[[1]][c(dim(.out_list[[1]])[1] - 1,
-                            dim(.out_list[[1]])[1]),1],
-           .out_list[[1]][dim(.out_list[[1]])[1],2],
-           sum(.out_list[[2]][,4])),
-         .dec_pattern,
-         .brac_pattern) %>%
-    unname() %>%
-    return()
-}
-
-#######
-# Function to 
-#######
-
-out_balance <- function(.out_list,
-                        .dec_pattern = c(2,2,2,0),
-                        .brac_pattern = c(F,F,F,F)) {
-  mapply(fixdec,
-         c(as.matrix(.out_list[[2]])[c(2,1),2],
-           .out_list[[1]][dim(.out_list[[1]])[1],1],
-           sum(.out_list[[2]][,4])),
-         .dec_pattern,
-         .brac_pattern) %>%
-    unname() %>%
-    return()
-}
-
-#######
-# Function to 
-#######
-
-out_robust <- function(.out_list,
-                       .dec_pattern = c(2,2),
-                       .brac_pattern = c(F,T),
-                       .coef_pattern = 4) {
-  if (dim(.out_list[[1]])[1] > 2)  {
-    mapply(fixdec,
-           .out_list[[1]][.coef_pattern,c(1,2)],
-           .dec_pattern,
-           .brac_pattern) %>%
-      unname() %>%
-      paste0(collapse = " ") %>%
-      return()
-  } else {
-    mapply(fixdec,
-           .out_list[[1]][dim(.out_list[[1]])[1],c(1,2)],
-           .dec_pattern,
-           .brac_pattern) %>%
-      unname() %>%
-      paste0(collapse = " ") %>%
-      return()
-  }
-}
-
-#######
 # Generate MDE plots
 #######
 
@@ -279,33 +172,19 @@ load_file <- function(data_file = "", path = local_datapath){
 #####
 # spillover weights
 #####
-
-# A general function to figure weights -- needed for RI 
-# Cases will be dropped if weight = Inf or weight = 1
-# cap of weight = 20 placed on weights
-gen_weight05 = function(D, I, data = gps, cap = 20){
+gen_weight= function(D, I, data = gps, cap = 20, km = "05" ){
   w  <- rep(NA, nrow(data))
-  w[D ==1 & I ==1] <- data$wDI_05[D ==1 & I ==1]
-  w[D ==0 & I ==1] <- data$w0I_05[D ==0 & I ==1]
-  w[D ==1 & I ==0] <- data$wD0_05[D ==1 & I ==0]
-  w[D ==0 & I ==0] <- data$w00_05[D ==0 & I ==0]
+  
+  w[D ==1 & I ==1] <- data[D ==1 & I ==1, paste0("wDI_", km)]
+  w[D ==0 & I ==1] <- data[D ==0 & I ==1, paste0("w0I_", km)]
+  w[D ==1 & I ==0] <- data[D ==1 & I ==0, paste0("wD0_", km)]
+  w[D ==0 & I ==0] <- data[D ==0 & I ==0, paste0("w00_", km)]
   w[w == Inf] <- NA
   w[w == 1]   <- NA
   w[w > cap] <- cap
   return(w)
 }
 
-gen_weight20 = function(D, I, data = gps, cap = 20){
-  w  <- rep(NA, nrow(data))
-  w[D ==1 & I ==1] <- data$wDI_20[D ==1 & I ==1]
-  w[D ==0 & I ==1] <- data$w0I_20[D ==0 & I ==1]
-  w[D ==1 & I ==0] <- data$wD0_20[D ==1 & I ==0]
-  w[D ==0 & I ==0] <- data$w00_20[D ==0 & I ==0]
-  w[w == Inf] <- NA
-  w[w == 1]   <- NA
-  w[w > cap] <- cap
-  return(w)
-}
 
 #####
 # function to assess how many treated villages from outside CDC within distance X?
@@ -318,11 +197,6 @@ indirect <- function(df = gps, d = 5, adjac = adj, treated = gps$TUUNGANE, binar
   if(binary) out <- 1*(out > 0) #REVIEWED OLD: 1*(out > 1)
   return(as.numeric(out))
 }
-
-
-## IS NA or NAN
-
-isNA <- function(x) is.na(x)  | is.nan(x)
 
 #####
 # tidy results

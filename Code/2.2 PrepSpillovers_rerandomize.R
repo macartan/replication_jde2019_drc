@@ -69,14 +69,14 @@ gps %<>%     dplyr::mutate(
 gps$wDI_05[gps$exclude05] <- NA; gps$w0I_05[gps$exclude05] <- NA; gps$wD0_05[gps$exclude05] <- NA; gps$w00_05[gps$exclude05] <- NA
 gps$wDI_20[gps$exclude20] <- NA; gps$w0I_20[gps$exclude20] <- NA; gps$wD0_20[gps$exclude20] <- NA; gps$w00_20[gps$exclude20] <- NA
 
-gps$gps_weight05 <- gen_weight05(D=gps$TUUNGANE, I=gps$indirect05, data = gps)
-gps$gps_weight20 <- gen_weight20(D=gps$TUUNGANE, I=gps$indirect20, data = gps)
+gps$gps_weight05 <- gen_weight(D=gps$TUUNGANE, I=gps$indirect05, data = gps, km = "05")
+gps$gps_weight20 <- gen_weight(D=gps$TUUNGANE, I=gps$indirect20, data = gps, km = "20")
 
 gps <- merge(gps, villmeans2, by = "IDV", all.x = TRUE)
 
 # Make weights matrices
-w05  <- sapply(1:spilloversims, function(j) gen_weight05(D=dir[,j], I=ind05[,j], data = gps))
-w20  <- sapply(1:spilloversims, function(j) gen_weight20(D=dir[,j], I=ind20[,j], data = gps))
+w05  <- sapply(1:spilloversims, function(j) gen_weight(D=dir[,j], I=ind05[,j], data = gps, km = "05"))
+w20  <- sapply(1:spilloversims, function(j) gen_weight(D=dir[,j], I=ind20[,j], data = gps, km = "20"))
 
 # Export these datasets for use without gps information
 gps <- select(gps, -starts_with("dist_")) %>% select(-c("latitude", "longitude"))
